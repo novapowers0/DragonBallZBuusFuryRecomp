@@ -31,8 +31,21 @@ int main(int argc, char** argv) {
 
     gbarecomp::RunOptions opts;
     opts.builtin_game_name = "Dragon Ball Z: Buu's Fury";
-    opts.builtin_rom_sha1 = "e65738e9d67688309f09811a54f495523ec9aada";
-    opts.builtin_rom_crc32 = 0xDCF23468u;
+    // Accepted USA dumps of the same retail cart (BG3E, rev 0). The primary is
+    // the GoodTools / RetroAchievements dump ("Dragon Ball Z - Buu's Fury (U)
+    // [!].gba", CRC32 01C1707F), which the generated code is built from; the
+    // alternatives are the No-Intro dump (CRC32 DCF23468) and the Spanish
+    // text-translation ("Dragon Ball Z - Buu's Fury (Spanish).gba"), which
+    // differ only in header / text-data bytes, so one generated image serves
+    // all three dumps.
+    opts.builtin_rom_sha1 = "f1c4b07554d2a3b1ad2f325307051e775ce68087";
+    opts.builtin_rom_crc32 = 0x01C1707Fu;
+    static const char* const kAltRomSha1[] = {
+        "e65738e9d67688309f09811a54f495523ec9aada",  // No-Intro dump
+        "ee667f656f6c3a128b9d59c657b3686e58b23eb5",  // Spanish translation
+    };
+    opts.builtin_rom_sha1_alts = kAltRomSha1;
+    opts.num_builtin_rom_sha1_alts = 2;
     opts.mod_game_id = "dragon-ball-z-buus-fury-us";
     opts.mod_owns_adaptive_view = true;
     opts.max_view_width = 480;

@@ -1,4 +1,4 @@
-# Dragon Ball Z: Buu's Fury (USA, BG3E, revision 0).
+﻿# Dragon Ball Z: Buu's Fury (USA, BG3E, revision 0).
 
 [game]
 name = "Dragon Ball Z: Buu's Fury"
@@ -17,8 +17,14 @@ static_resume_all = true
 codegen_shards = 32
 
 [identity]
-sha1 = "e65738e9d67688309f09811a54f495523ec9aada"
-md5 = "808eda67b17c901e9052f47bdc419e2f"
+# Two known-good USA dumps of the same retail cart (BG3E, rev 0) are
+# accepted. Primary: GoodTools / RetroAchievements dump (CRC32 01C1707F),
+# used to regenerate. Alternative: the No-Intro dump (CRC32 DCF23468).
+# Both differ only in the 0x00-0xBF header region, so one generated image
+# serves both.
+sha1 = "f1c4b07554d2a3b1ad2f325307051e775ce68087"
+md5 = "3a74fce97f1ea2b28c2a50ec3df0acee"
+sha1_alt = ["e65738e9d67688309f09811a54f495523ec9aada"]
 
 [bios]
 path = "gbarecomp/bios/gba_bios.bin"
@@ -27,7 +33,11 @@ hle = false
 
 [rom]
 path = "roms/dragon_ball_z_buus_fury_usa.gba"
-sha1 = "e65738e9d67688309f09811a54f495523ec9aada"
+sha1 = "f1c4b07554d2a3b1ad2f325307051e775ce68087"
+sha1_alt = ["e65738e9d67688309f09811a54f495523ec9aada",
+            "ee667f656f6c3a128b9d59c657b3686e58b23eb5"]
+crc32 = "0x01C1707F"
+crc32_alt = ["0xDCF23468"]
 
 [save]
 type = "eeprom"
@@ -5720,3 +5730,893 @@ format = "pcrel_thumb"
 entries_mode = "thumb"
 name = "runtime_destructors"
 note = "Destructor table decoded from 0x08046AC0 through exclusive end 0x08049114"
+
+# ── Observed self-heal dispatch misses (zone-start coverage) ──
+# Merged from recomp_seed_proposals.toml: computed-jump targets the AOT finder
+# could not reach statically; observed self-healing at runtime (USA headless +
+# Spanish initial-zone session). Review retained in recomp_seed_proposals.toml.
+
+[[extra_func]]
+addr = 0x080062D8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080065BC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080065C0
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080065D4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080065DA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0800660E
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080068B8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080068CE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080068E2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080068E8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08006934
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08006938
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08006976
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08006980
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0800698C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0800699A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080069A8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080069B8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080069D8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080069E4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080069E6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08006A06
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08006A5A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08006A5C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08006AA4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08007768
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080079BC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080079D8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080079E2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080097A6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080097EA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08009812
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080125E8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012B90
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012B98
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012BA2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012BBE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012BC4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012BC6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012BE2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012BFC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012C18
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012C28
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012C3E
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012C4A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012C4C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012C6A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012C7E
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012C90
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012CA0
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012CA2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012CAA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012CB4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012CCA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012CCC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012CDA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012CF0
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012D02
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012D78
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012DEE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012E04
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012E56
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012E74
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012E92
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012EA0
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012EB6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012EC4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012EDA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012EE8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012EF8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012F02
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012F0C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012F1C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012F6E
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012F7C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012F88
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012F8C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08012F9A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801425C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014424
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014526
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014538
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014544
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801455C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014588
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080145BC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080146B6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080146E0
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080146E2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014712
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014740
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014770
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801478A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014798
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080147A4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080147AC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080147B4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014AC8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014B82
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014BBC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014BDE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014BE2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014BF6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014BFC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08014C30
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016574
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080167A0
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080167E0
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080167EA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016928
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016962
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016976
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016982
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801699A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080169AA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080169B2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080169BE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016AA8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016C5C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016C84
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016CA8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016CC8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016E36
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016E4A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016E5C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016E6A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016E76
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016E82
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016E9A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016EC6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016EDE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016EF6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08016FC4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08017078
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080170A6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080170A8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080170D2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x080170F6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801A216
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801A224
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801A226
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801A232
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801A238
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801A334
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801A342
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801A344
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801A358
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801DFE0
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E080
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E09C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E0A6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E0AE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E0B6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E0F2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E122
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E12C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E12E
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E13C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0801E140
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C04
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C34
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C38
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C44
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C4C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C52
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C54
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C64
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C70
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C92
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024C98
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024CD8
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024D16
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024D26
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024D32
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08024D40
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025B20
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025B32
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025B34
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025B80
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025B96
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025BA6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025BEC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025C14
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025C30
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025C40
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025C62
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025C66
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025CD4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025CFA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025D2E
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025D48
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025D6A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025D80
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025D96
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025DAE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025DCE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025DDC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08025DEE
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026BBC
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026BE6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026BF6
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026BFA
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026C0A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026C0E
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026C1E
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026C22
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026C24
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026C3C
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026C60
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026C62
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026E6A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026E84
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026EA2
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026EA4
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026F2A
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08026F6E
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0804993C
+mode = "arm"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x08049964
+mode = "arm"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0804A47C
+mode = "arm"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0804A4A4
+mode = "arm"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+[[extra_func]]
+addr = 0x0804F090
+mode = "thumb"
+note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"

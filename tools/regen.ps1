@@ -14,9 +14,12 @@ if (-not (Test-Path -LiteralPath $tool)) {
 }
 
 $actual = (Get-FileHash -LiteralPath $romPath -Algorithm SHA1).Hash.ToLowerInvariant()
-$expected = 'e65738e9d67688309f09811a54f495523ec9aada'
-if ($actual -ne $expected) {
-    throw "Buu's Fury ROM SHA-1 mismatch: got $actual expected $expected"
+$expected = @(
+    'f1c4b07554d2a3b1ad2f325307051e775ce68087',  # RA / GoodTools dump
+    'e65738e9d67688309f09811a54f495523ec9aada'   # No-Intro dump
+)
+if ($expected -notcontains $actual) {
+    throw "Buu's Fury ROM SHA-1 mismatch: got $actual expected $($expected -join ' or ')"
 }
 
 & $tool --rom $romPath --config (Join-Path $root 'game.toml') `

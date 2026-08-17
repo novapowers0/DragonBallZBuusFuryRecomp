@@ -1,16 +1,19 @@
 format_version = 1
 id = "dragon-ball-z-buus-fury.enhancement.adaptive-view"
-version = "1.0.0"
+version = "1.0.1"
 name = "Buu's Fury Adaptive Widescreen"
 author = "mstan"
-description = "Reveals more of the overworld as the window widens and anchors the HUD to the physical edges."
+description = "Reveals more of the overworld as the window widens and anchors the HUD to the physical edges. Upgraded by NovaPowers."
 license = "MIT"
 resolver = "declarative"
 save_compatibility = "shared"
 
 [[target]]
 game_id = "dragon-ball-z-buus-fury-us"
-rom_sha1 = "e65738e9d67688309f09811a54f495523ec9aada"
+# All accepted dumps resolve to the same generated code: the RA/GoodTools
+# primary, the No-Intro alternative (both header-only differences), and the
+# Spanish text translation (header + text-data differences).
+rom_sha1 = ["f1c4b07554d2a3b1ad2f325307051e775ce68087", "e65738e9d67688309f09811a54f495523ec9aada", "ee667f656f6c3a128b9d59c657b3686e58b23eb5"]
 
 [[feature]]
 id = "adaptive-view"

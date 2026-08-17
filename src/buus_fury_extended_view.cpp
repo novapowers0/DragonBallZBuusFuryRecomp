@@ -45,6 +45,15 @@ std::unordered_map<
 std::unordered_map<std::uint32_t, std::pair<int, int>>
     g_content_x_bounds;
 int g_render_view_shift = 0;
+// The overworld layer cache is rebuilt when the game re-creates field objects
+// (new area / new game). Scanning ALL of EWRAM to re-find them is expensive, so
+// the scan is gated to at most once per composed frame. Without the gate, a
+// scene whose BG/IO state matches is_overworld before the layer objects exist
+// (the first frames of a new game) would trigger one full 64K-iteration scan
+// per margin pixel the tilemap provider visits — a multi-second freeze per
+// frame.
+std::uint32_t g_resolve_frame = 0;
+std::uint32_t g_last_scan_frame = 0;
 
 struct ObjXHistory {
     std::uint16_t attr0_shape = 0;
@@ -391,7 +400,17 @@ void resolve_field_objects(gba::GbaBus* bus) {
     bool current = true;
     for (int layer = 0; layer < 4; ++layer)
         current &= field_object_valid(bus, g_field_objects[layer], layer);
-    if (current) return;
+    if (current) {
+        g_last_scan_frame = g_resolve_frame;
+        return;
+    }
+    // Scan at most once per composed frame. While the game is mid-transition
+    // (DISPCNT already field-shaped but layer objects not yet created) the
+    // tilemap provider visits ~50K margin pixels per frame; each must NOT
+    // trigger a fresh 64K-iteration EWRAM sweep.
+    if (g_last_scan_frame == g_resolve_frame)
+        return;
+    g_last_scan_frame = g_resolve_frame;
 
     for (std::uint32_t& object : g_field_objects)
         object = 0u;
@@ -651,6 +670,7 @@ extern "C" int buus_fury_bg_x_provider(
     // in this per-pixel callback.
     if (bg == 3 && output_x == 0 && screen_y == 0) {
         g_render_view_shift = calculate_view_shift(bus);
+        ++g_resolve_frame;
         g_previous_obj_x = g_current_obj_x;
         g_current_obj_x = {};
         if (++g_obj_x_generation == 0) {
@@ -780,7 +800,13 @@ extern "C" int buus_fury_bus_read_override(
         const int extension =
             static_cast<int>(g_ws_extra_left) - view_shift +
             kActorCullPadding;
-        *out_value = original - static_cast<std::uint32_t>(extension);
+        // Clamp the left bound at 0 instead of subtracting into uint32
+        // underflow. At the world's left edge (the start of a new game) the
+        // native camera rect begins near 0; a wrapped bound makes the actor
+        // renderer believe every piece spans a huge rectangle.
+        const std::int32_t original_i = static_cast<std::int32_t>(original);
+        *out_value = original_i > extension
+            ? static_cast<std::uint32_t>(original_i - extension) : 0u;
         return 1;
     }
     if (visibility_right && address == kCameraRight) {
@@ -801,6 +827,8 @@ void install_extended_view(std::uint32_t, std::uint32_t) {
     g_decoded_chunks.clear();
     g_content_x_bounds.clear();
     g_render_view_shift = 0;
+    g_resolve_frame = 0;
+    g_last_scan_frame = 0;
     g_previous_obj_x = {};
     g_current_obj_x = {};
     g_actor_history = {};
