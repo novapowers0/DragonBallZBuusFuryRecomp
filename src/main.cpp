@@ -54,6 +54,10 @@ const gbarecomp::GbaEditField kEditFields[] = {
      0x0300157Cu, 16, 0, 9999, 100},
     {"EXP (slot 1)", "Experience of the first character.",
      0x03001584u, 32, 0, 999999999, 1000},
+    {"Attack (slot 1)", "Attack/strength of the first character.",
+     0x03001588u, 16, 0, 65535, 100},
+    {"Dragon Balls", "Dragon Ball flags (all found = 65535).",
+     0x030010CAu, 16, 0, 65535, 1},
 };
 
 void print_usage() {
