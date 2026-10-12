@@ -1,4 +1,4 @@
-# Dragon Ball Z: Buu's Fury Recomp — v0.0.3 WIP (Release ejecutable)
+# Dragon Ball Z: Buu's Fury Recomp — v0.0.4 WIP (Release ejecutable)
 
 Copyright (c) 2026 **NovaPowers**. Fork de
 [`mstan/DragonBallZBuusFuryRecomp`](https://github.com/mstan/DragonBallZBuusFuryRecomp),
@@ -15,6 +15,7 @@ archivos de tu copia legal.
 - `SDL2.dll`, `libgcc_s_seh-1.dll`, `libstdc++-6.dll`, `libwinpthread-1.dll` — dependencias runtime
 - `overlay_toolchain/` — compilador para self-heal de cobertura en runtime
 - `assets/`, `mods/` — recursos y mods del launcher (se generan al primer arranque)
+- `README.md` — guía rápida de instalación (en inglés, dentro del ZIP)
 - `RELEASE_README.md` — este archivo
 
 ## Cómo instalar y jugar
@@ -30,15 +31,24 @@ archivos de tu copia legal.
 2. **Ejecuta** `DragonBallZBuusFuryRecomp.exe`.
 3. En el launcher elige la ROM, la BIOS, y (si hay dump español) el idioma
    **EN/ES**; pulsa **Play**.
-4. En **Mods** puedes activar el **Adaptive Widescreen** (v1.0.1).
+4. En **Mods** puedes activar el **Adaptive Widescreen** (v1.0.4).
 
-## Novedades de este release (v0.0.3 WIP)
+## Novedades de este release (v0.0.4 WIP)
 
-- **Fix del crash del overworld**: la zona inicial valida **FULLY STATIC**
-  (sin bridge runaway). Se amplió la cobertura estática con +221 `extra_func`.
-- **3 dumps equivalentes** (USA RA/GoodTools, USA No-Intro, español).
-- **Launcher EN/ES** con etiqueta "USA + Mod SPA" y carátula española embebida.
-- **crash.log** junto al exe ante cualquier fallo del runtime (para reportar).
+- **Motor actualizado**: se fusionaron las mejoras recientes del framework
+  `gbarecomp` (+154 commits) y del launcher `recomp-ui` (+421 commits). Trae
+  mejoras de rendimiento, estabilidad, netplay y opciones nuevas de pantalla y
+  audio.
+- **Pantalla ancha intacta**: se revalidaron 108 escenas y la vista ensanchada
+  sigue siendo **idéntica en su zona central** a la imagen original (0,0000 %
+  de diferencia), así que ninguna mejora del motor rompió el mod.
+- **Compilación pública sin la carátula**: el código ya **no necesita** la
+  carátula española con copyright para compilar. Si falta, usa la carátula por
+  defecto en lugar de fallar.
+- **Mod Adaptive Widescreen v1.0.4** (antes v1.0.1).
+- **Nueva herramienta de verificación** (`tools/regression_check.ps1`): compara
+  automáticamente la vista ancha contra la nativa en todas tus escenas guardadas
+  y avisa si algo se rompe.
 
 ## Bugs conocidos
 
@@ -46,6 +56,8 @@ archivos de tu copia legal.
   Haz copia de tus partidas.
 - Las cajas de texto de algunas cutscenes pueden presentar artefactos al
   ensanchar la vista (investigación en curso).
+- Los personajes compuestos (Goku montado, vehículos, etc.) pueden verse
+  ligeramente desplazados; también ocurre a 240 px y es anterior a esta versión.
 
 ## Legal
 

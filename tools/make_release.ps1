@@ -164,8 +164,13 @@ if ($forbidden) {
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
 
+$hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$hashFile = "$zip.sha256"
+"$hash  $(Split-Path -Leaf $zip)" | Out-File -LiteralPath $hashFile -Encoding ascii -NoNewline
+Add-Content -LiteralPath $hashFile -Value "`n"
+
 Write-Host "--- $stageName ---"
 Get-ChildItem -LiteralPath $stage | Select-Object Name, Length | Out-Host
 Get-Item -LiteralPath $zip | Select-Object Name, Length | Out-Host
-Get-FileHash -LiteralPath $zip -Algorithm SHA256 |
-    Select-Object Algorithm, Hash, Path | Out-Host
+Write-Host "sha256: $hash"
+Write-Host "checksum file: $hashFile"
