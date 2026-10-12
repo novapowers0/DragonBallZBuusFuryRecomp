@@ -13,6 +13,32 @@
 
 namespace {
 
+// Player-facing cheats: curated CodeBreaker Advance codes for this cart
+// (BG3E). Every one starts off; enabling one in the in-game "Cheats" menu
+// re-applies it once per frame. RAM addresses are the shared BG3E layout, so
+// they serve the USA dump and the Spanish translation alike.
+const gbarecomp::CheatPreset kCheats[] = {
+    {"Max Zenie",
+     "Sets your money to 99,999,999.",
+     "8300155C E0FF\n8300155E 05F5"},
+    {"Infinite HP (all)",
+     "Keeps every character's HP and max HP at 9999.",
+     "43001576 270F\n00000008 0068\n43001578 270F\n00000008 0068"},
+    {"Infinite EP (all)",
+     "Keeps every character's EP and max EP at 9999.",
+     "4300157A 270F\n00000008 0068\n4300157C 270F\n00000008 0068"},
+    {"Max EXP (all)",
+     "Sets every character's EXP to its maximum.",
+     "43001584 C9FF\n00000008 0068\n43001586 3B9A\n00000008 0068"},
+    {"Infinite fusion time",
+     "Holds the fusion timer so a fusion never runs out.",
+     "83001840 466D"},
+    {"All Dragon Balls found",
+     "Marks every Dragon Ball as collected. Turn it off and save after the "
+     "Dragon Ball quest so the story keeps progressing.",
+     "830010CA FFFF"},
+};
+
 void print_usage() {
     std::printf(
         "DragonBallZBuusFuryRecomp [--bios <path>] [--rom <path>] "
@@ -67,6 +93,12 @@ int main(int argc, char** argv) {
     opts.rewind_capture_interval_frames = 15;
     opts.autosave_interval_seconds = 30;
     opts.resume_suspend_state_on_launch = true;
+
+    // Player-facing cheats: an in-game "Cheats" menu of optional CodeBreaker
+    // codes (all disabled by default).
+    opts.expose_cheats = true;
+    opts.cheat_presets = kCheats;
+    opts.cheat_preset_count = sizeof(kCheats) / sizeof(kCheats[0]);
 
     std::vector<std::string> args(argv, argv + argc);
 
