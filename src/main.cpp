@@ -58,6 +58,16 @@ int main(int argc, char** argv) {
     opts.launcher_region = "USA";
     opts.launcher_game_config = "game.toml";
 
+    // Player-facing quality of life: an in-game Assist Tools menu with save
+    // states, fast-forward and a short rewind buffer, plus a periodic autosave
+    // crash guard that resumes the last snapshot after an unclean exit.
+    opts.expose_assist_tools = true;
+    opts.assist_tools_enabled_by_default = true;
+    opts.rewind_history_seconds = 8;
+    opts.rewind_capture_interval_frames = 15;
+    opts.autosave_interval_seconds = 30;
+    opts.resume_suspend_state_on_launch = true;
+
     std::vector<std::string> args(argv, argv + argc);
 
 #if defined(GBAGAME_RECOMP_UI)

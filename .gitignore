@@ -12,6 +12,8 @@ saves/
 *.flash
 *.state
 *.state[0-9]
+*.suspend.state
+*.suspend.pending
 
 # Build output.
 build/
