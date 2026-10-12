@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -57,14 +58,33 @@ int main(int argc, char** argv) {
     opts.launcher_region = "USA";
     opts.launcher_game_config = "game.toml";
 
-#if defined(GBAGAME_RECOMP_UI)
     std::vector<std::string> args(argv, argv + argc);
+
+#if defined(GBAGAME_RECOMP_UI)
     if (game_launcher_preboot(args, opts)) return 0;
+#endif
+
+    // Fast start: skip the GBA boot logo/chime by default. This is a
+    // presentation choice only — the recompiled BIOS stays linked and still
+    // services IRQs and SWIs, so no guest semantics change. An explicit
+    // --bios-skip-intro/--no-bios-skip-intro flag or GBARECOMP_BIOS_SKIP_INTRO
+    // in the environment restores the authentic intro.
+    bool intro_choice_given = false;
+    for (const std::string& a : args) {
+        if (a == "--bios-skip-intro" || a == "--no-bios-skip-intro" ||
+            a == "--bios-hle" || a == "--no-bios-hle" ||
+            a == "--bios-hle-keep-intro") {
+            intro_choice_given = true;
+            break;
+        }
+    }
+    if (!intro_choice_given &&
+        std::getenv("GBARECOMP_BIOS_SKIP_INTRO") == nullptr) {
+        args.emplace_back("--bios-skip-intro");
+    }
+
     std::vector<char*> av;
     av.reserve(args.size());
-    for (auto& arg : args) av.push_back(arg.data());
+    for (std::string& arg : args) av.push_back(arg.data());
     return gbarecomp::run_game(static_cast<int>(av.size()), av.data(), opts);
-#else
-    return gbarecomp::run_game(argc, argv, opts);
-#endif
 }
