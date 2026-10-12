@@ -104,6 +104,56 @@ $states = @(Get-ChildItem -LiteralPath $stateRoot -Recurse -File -ErrorAction Si
     Sort-Object FullName)
 if ($states.Count -eq 0) { throw "No .state files under $stateRoot." }
 
+# Adaptive widescreen is owned by a mod package and is disabled by default, so
+# --view-width alone never widens the frame (the mod state is authoritative).
+# Enable every feature of the catalog next to the executable for the duration
+# of the check, then restore whatever was there before.
+$exeDir = Split-Path -Parent $Exe
+$modsDir = Join-Path $exeDir 'mods'
+$modStatePath = Join-Path $modsDir 'state.toml'
+$modStateBackup = $null
+$modEnabled = $false
+$packagesDir = Join-Path $modsDir 'packages'
+if (Test-Path -LiteralPath $packagesDir) {
+    $manifests = @(Get-ChildItem -LiteralPath $packagesDir -Recurse -File -Filter 'manifest.toml')
+    # Prefer the highest package version (stale build copies can linger).
+    $manifest = $manifests |
+        Sort-Object -Property {
+            [version](Split-Path -Leaf (Split-Path -Parent $_.FullName))
+        } -Descending | Select-Object -First 1
+    if ($manifest) {
+        $text = Get-Content -LiteralPath $manifest.FullName -Raw
+        $pkgId = [regex]::Match($text, '(?m)^\s*id\s*=\s*"([^"]+)"').Groups[1].Value
+        $pkgVer = [regex]::Match($text, '(?m)^\s*version\s*=\s*"([^"]+)"').Groups[1].Value
+        $featIds = [regex]::Matches($text, '(?s)\[\[feature\]\](.*?)(?=\n\[\[|\Z)') |
+            ForEach-Object {
+                [regex]::Match($_.Groups[1].Value, '(?m)^\s*id\s*=\s*"([^"]+)"').Groups[1].Value
+            }
+        if ($pkgId -and $pkgVer -and $featIds.Count -gt 0) {
+            if (Test-Path -LiteralPath $modStatePath) {
+                $modStateBackup = Get-Content -LiteralPath $modStatePath -Raw
+            }
+            $sb = [System.Text.StringBuilder]::new()
+            [void]$sb.AppendLine('format_version = 1')
+            [void]$sb.AppendLine('')
+            [void]$sb.AppendLine('[[package]]')
+            [void]$sb.AppendLine("id = `"$pkgId`"")
+            [void]$sb.AppendLine("version = `"$pkgVer`"")
+            foreach ($fid in $featIds) {
+                [void]$sb.AppendLine('')
+                [void]$sb.AppendLine('[[feature]]')
+                [void]$sb.AppendLine("package_id = `"$pkgId`"")
+                [void]$sb.AppendLine("id = `"$fid`"")
+                [void]$sb.AppendLine('enabled = true')
+            }
+            New-Item -ItemType Directory -Force -Path $modsDir | Out-Null
+            Set-Content -LiteralPath $modStatePath -Value $sb.ToString() -Encoding ascii
+            $modEnabled = $true
+            Write-Host "Enabled mod package $pkgId $pkgVer ($($featIds -join ', ')) for the check."
+        }
+    }
+}
+
 $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ('buus_fury_regression_' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $scratch | Out-Null
 
@@ -136,7 +186,9 @@ function Compare-Strip([string]$widePng, [string]$nativePng) {
         $height = [Math]::Min($wide.Height, $native.Height)
         if ($height -le 0) { throw "empty frame" }
         $offsetX = [int](($wide.Width - $native.Width) / 2)
-        if ($offsetX -lt 0) { throw "wide frame ($($wide.Width)) is narrower than native ($($native.Width))" }
+        if ($wide.Width -le $native.Width) {
+            throw "wide frame ($($wide.Width)) did not widen past native ($($native.Width)): the adaptive-view mod is disabled or not expanding"
+        }
         $diff = 0
         for ($y = 0; $y -lt $height; $y++) {
             for ($x = 0; $x -lt $native.Width; $x++) {
@@ -186,6 +238,13 @@ try {
         $results += [pscustomobject]@{ State = $label; DiffPercent = $pct; Status = ($(if ($ok) { 'PASS' } else { 'FAIL' })) }
     }
 } finally {
+    if ($modEnabled) {
+        if ($null -ne $modStateBackup) {
+            Set-Content -LiteralPath $modStatePath -Value $modStateBackup -Encoding ascii
+        } else {
+            Remove-Item -LiteralPath $modStatePath -Force -ErrorAction SilentlyContinue
+        }
+    }
     Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
 }
 

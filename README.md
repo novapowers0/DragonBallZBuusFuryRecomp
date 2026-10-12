@@ -1,89 +1,83 @@
-# Dragon Ball Z: Buu's Fury Recomp — v0.0.3 WIP
+# Dragon Ball Z: Buu's Fury Recomp
 
-> **Fork** of [`mstan/DragonBallZBuusFuryRecomp`](https://github.com/mstan/DragonBallZBuusFuryRecomp)
-> maintained by **NovaPowers** (see [Credits](#cr%C3%A9ditos) and
-> [Fork of mstan](#fork-de-mstan)).
->
-> Experimental preview of a static recompilation of **Dragon Ball Z: Buu's
-> Fury** for Windows, with an optional **Adaptive Widescreen** mod. This fork
-> adds crash fixes for the overworld, expanded static coverage of the starting
-> zone, support for three equivalent ROM dumps (including the Spanish text
-> translation), and an EN/ES launcher with the Spanish cover art.
+![Plataforma](https://img.shields.io/badge/plataforma-Windows%20x64-blue)
+![Estado](https://img.shields.io/badge/estado-preview%20experimental-orange)
+![Licencia](https://img.shields.io/badge/licencia-PolyForm%20Noncommercial%201.0.0-lightgrey)
+![Comunidad](https://img.shields.io/badge/R.A.I.D.-Discord-7289da)
 
-The game ROM and Nintendo GBA BIOS are **not included**. You must provide your
-own legally obtained dumps. This build accepts three equivalent dumps of the
-same retail cart (`BG3E`, rev 0) — see [`baserom.md`](baserom.md) for the
-exact hashes.
+Recompilación estática de **Dragon Ball Z: Buu's Fury** (Game Boy Advance) a una
+aplicación nativa de Windows, con **pantalla ancha adaptativa** opcional y varias
+mejoras de calidad de vida. La lógica original del juego se traduce a código
+nativo en lugar de ejecutarse dentro de un emulador.
 
-## Fork de mstan
+> **Fork** de [`mstan/DragonBallZBuusFuryRecomp`](https://github.com/mstan/DragonBallZBuusFuryRecomp)
+> mantenido por **NovaPowers**. El motor [`gbarecomp`](https://github.com/mstan/gbarecomp)
+> y el launcher [`recomp-ui`](https://github.com/mstan/recomp-ui) son también
+> forks propios que incorporan los cambios de este proyecto. Todo el mérito del
+> recompilador y de la estructura original es de **Matthew Stan (mstan)** y la
+> comunidad **R.A.I.D. — Retro AI Development**.
 
-Este repositorio es un **fork** de
-[`mstan/DragonBallZBuusFuryRecomp`](https://github.com/mstan/DragonBallZBuusFuryRecomp),
-el proyecto original de recompilación estática. El motor
-[`gbarecomp`](https://github.com/mstan/gbarecomp) y el launcher
-[`recomp-ui`](https://github.com/mstan/recomp-ui) también son forks propios
-(`novapowers0/gbarecomp`, `novapowers0/recomp-ui`) que incorporan los cambios
-de este proyecto. Todo el crédito del recompilador y la estructura original es
-de **Matthew Stan (mstan)** y la comunidad **R.A.I.D. — Retro AI Development**;
-este fork aporta mejoras específicas para Buu's Fury.
+**No se incluye** ninguna ROM ni la BIOS de Nintendo. Debes aportar los archivos
+de tu copia legal. Se aceptan tres dumps equivalentes del mismo cartucho
+(`BG3E`, rev 0), incluida la traducción al español — consulta
+[`baserom.md`](baserom.md) para los hashes exactos.
 
-## Qué aporta este fork (v0.0.3)
+---
+
+## Lo más destacado
+
+- **Pantalla ancha adaptativa** (mod opcional): revela mundo autoría real en los
+  márgenes al ensanchar la ventana, sin estirar la imagen ni tocar la cámara.
+- **Autosave con recuperación**: guarda una instantánea cada 30 s y reanuda la
+  partida tras un cierre inesperado.
+- **Herramientas de partida**: estados de guardado, avance rápido y rebobinado.
+- **Arranque rápido**: salta la intro del BIOS (reversible).
+- **Cinco perfiles de color de pantalla**: Raw, Unlit, Frontlit, Backlit y Classic.
+- **Launcher EN/ES** con carátula española cuando se detecta la traducción.
+- **Audio corregido** (el crujido constante del mezclador original).
+
+## Novedades de este fork
 
 | Cambio | Detalle |
 |---|---|
-| **Fix de crash en el overworld** | Un *bridge runaway* en la zona inicial (dispatch miss sin cobertura que el intérprete recorría 200M instrucciones y abortaba) se resolvió ampliando la cobertura estática. |
-| **Cobertura estática expandida** | +221 `extra_func` de la zona inicial (targets de saltos computados que el finder AOT no descubría) fusionadas en `game.toml` y regeneradas → la zona inicial queda **FULLY STATIC** (sin bridge/overlay en runtime). |
-| **Soporte de 3 dumps equivalentes** | RA/GoodTools (`f1c4...`), No-Intro (`e657...`) y traducción al español (`ee667...`); todos del mismo cart `BG3E`, un único código generado los sirve. |
-| **Launcher EN/ES** | Selector de idioma EN/ES cuando se detecta el dump español, con etiqueta de región "USA + Mod SPA" y carátula española (ver Legal). |
-| **Logger de crash** | El runtime escribe `crash.log` junto al exe con el PC del runaway y todos los dispatch misses de la sesión (útil para reportar). |
-| **Mod v1.0.1** | Adaptive Widescreen actualizado por NovaPowers (view shift correcto, márgenes con tiles autoría, HUD anclado a los bordes). |
+| **Arranque rápido** | Salta la intro del BIOS por defecto (presentación; el BIOS real sigue ejecutándose para IRQ/SWI). Reversible con `--no-bios-skip-intro`. |
+| **Autosave + recuperación** | Instantánea periódica junto a la ROM; si el proceso muere sin salir limpiamente, el siguiente arranque reanuda. Una salida normal no reanuda. |
+| **Herramientas en el menú** | Estados (F1–F9 / Shift+F1–F9), avance rápido y rebobinado de 8 s, conmutables desde el menú del juego. |
+| **Audio arreglado** | El motor mezcla a 32.768 Hz pero se reproducía como si fueran 65.536; el búfer quedaba siempre vacío y sonaba "petardeado". Ahora suena limpio. |
+| **Fix de crash en el overworld** | Un *bridge runaway* en la zona inicial se resolvió ampliando la cobertura estática. |
+| **Cobertura estática ampliada** | La zona inicial del overworld valida **FULLY STATIC** (0 misses, 0 interpretadas). |
+| **Tres dumps equivalentes** | GoodTools/RA (`f1c4…`), No-Intro (`e657…`) y traducción al español (`ee667…`); un único código generado los sirve. |
+| **Launcher EN/ES** | Selector de idioma cuando hay dump español, etiqueta de región "USA + Mod SPA" y carátula española. |
 
 ## Estado
 
-La versión USA arranca su secuencia de atracción y entra en gameplay. Tras la
-expansión de cobertura, la zona inicial del overworld valida **FULLY STATIC**
-(`dispatch_misses=0`, `interpreted_insns=0`, `failed=0` en headless para USA y
-la traducción española). Sigue siendo un preview experimental; no se ha
-probado de forma exhaustiva todo el juego, así que haz copia de tus partidas.
+Preview **experimental**. La versión USA arranca, pasa la secuencia de atracción
+y entra en gameplay; la validación estricta cubre atracción, gameplay y
+recorridos sin instrucciones interpretadas ni dispatch misses. No se ha probado
+de forma exhaustiva todo el juego, así que **haz copia de tus partidas**.
 
-## Quick start (jugadores)
+## Quick start
 
 1. Descarga el ZIP de Windows desde la pestaña **Releases** y extráelo.
 2. Ejecuta `DragonBallZBuusFuryRecomp.exe`.
-3. En el launcher selecciona tu ROM **Dragon Ball Z: Buu's Fury (USA)**, la
-   alternativa No-Intro o la traducción española, y la BIOS GBA retail.
-4. Configura pantalla, audio, controles y mods, y pulsa **Play**.
+3. En el launcher elige tu ROM (USA, No-Intro o la traducción española) y la
+   BIOS GBA retail.
+4. Ajusta pantalla, audio, controles y mods, y pulsa **Play**.
 
-Si está presente la traducción española, el launcher muestra un selector
-**EN/ES** junto a *Mods*: EN arranca el dump USA y ES el español, y además
-cambia el idioma de la interfaz del launcher. La etiqueta de región es
-"USA + Mod SPA" y la carátula cambia a la española.
+Si está presente la traducción española, aparece un selector **EN/ES** junto a
+*Mods*. El launcher recuerda los archivos válidos; marca **Skip launcher on
+boot** para ir directo al juego en los siguientes arranques.
 
-El launcher recuerda los archivos válidos tras la primera configuración.
-Marca **Skip launcher on boot** si quieres que los siguientes arranques vayan
-directos al juego.
+## Mod de pantalla ancha
 
-## Mod incluido
+**Buu's Fury Adaptive Widescreen** es opcional y está **desactivado por
+defecto**. Al ensanchar la ventana, la vista lógica crece de 240×160 hasta
+480×160 revelando mundo autoría real en los márgenes (no es un estirado ni un
+recorte), con streaming de los chunks de campo y visibilidad de actores
+ampliada. La imagen fiel **240×160 permanece idéntica** con el mod apagado.
+Actívalo en la página **Mods** del launcher.
 
-**Buu's Fury Adaptive Widescreen** (v1.0.1, actualizado por NovaPowers) es
-opcional y está desactivado por defecto. Expande el HUD y el overworld al
-redimensionar la ventana (hasta una vista lógica 480×160), haciendo streaming
-de los chunks de campo autoría y ampliando la visibilidad de actores. No
-estira la imagen original ni cambia coordenadas de cámara o mundo. La imagen
-fiel 240×160 permanece intacta. Ábrelo en la página **Mods** del launcher.
-
-## Características
-
-- Aplicación nativa Windows x64
-- Configuración de ROM y BIOS a través del launcher
-  [recomp-ui](https://github.com/mstan/recomp-ui)
-- Mod Adaptive Widescreen opcional con HUD anclado a los bordes
-- Soporte de teclado y mando moderno
-- Juego en ventana y pantalla completa con escalado nítido y filtrado opcional
-- Menú de ajustes en el juego
-- Guardados de cartucho y save states
-
-## Controles
+## Controles y atajos
 
 | Control GBA | Teclado |
 |---|---|
@@ -92,13 +86,15 @@ fiel 240×160 permanece intacta. Ábrelo en la página **Mods** del launcher.
 | Start | Enter |
 | Select | Backspace |
 
-Usa **Shift+F1-F9** para guardar un estado y **F1-F9** para cargarlo. Los
-controles se cambian desde el launcher.
+- **Shift+F1–F9**: guardar estado · **F1–F9**: cargar estado.
+- **Avance rápido** y **rebobinado**: desde el menú de herramientas del juego.
+- **Autosave**: automático cada 30 s mientras juegas en ventana.
 
-## Building from source (desarrolladores)
+Los controles se cambian desde el launcher.
 
-Requisitos en Windows: CMake, Ninja, MSYS2 MinGW64 y SDL2. Clona con los
-submódulos (apuntan a los forks del motor de este proyecto):
+## Compilar desde el código
+
+Requisitos en Windows: CMake, Ninja, MSYS2 MinGW64 y SDL2.
 
 ```powershell
 git clone --recurse-submodules `
@@ -112,45 +108,51 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target DragonBallZBuusFuryRecomp
 ```
 
-La generación requiere la revisión de ROM soportada y una BIOS GBA retail. Sus
-identidades y rutas de desarrollo local están documentadas en
-[`baserom.md`](baserom.md) y [`game.toml`](game.toml). El código derivado de la
-ROM, los inputs con copyright, las partidas y el output de build quedan
-**locales y nunca se suben**.
+La generación requiere la revisión de ROM soportada y una BIOS GBA retail; sus
+identidades y rutas locales están en [`baserom.md`](baserom.md) y
+[`game.toml`](game.toml). El código derivado de la ROM, los inputs con
+copyright, las partidas y el output de build quedan **locales y nunca se suben**.
 
-> **Carátula española**: el exe de release lleva la carátula española embebida.
-> En un checkout de fuente, `gbarecomp/src/runtime/cover_embedded.h` **no se
-> distribuye** (contiene arte con copyright). El launcher compila igual sin
-> ella (usa la carátula por defecto para el dump español); genérala localmente
-> desde tu propia `cover.jpg` si quieres la carátula embebida.
+> **Carátula española**: el exe de release la lleva embebida. En un checkout de
+> fuente, `gbarecomp/src/runtime/cover_embedded.h` no se distribuye (arte con
+> copyright); el launcher compila igual sin ella.
+
+## Verificación
+
+`tools/regression_check.ps1` activa el mod de pantalla ancha, ejecuta el juego
+sin ventana a 480 px y a 240 px desde los mismos estados, y comprueba que la
+franja central de la imagen ancha coincide con la nativa (la mejora debe ser un
+superconjunto exacto). Exige además que el fotograma realmente se ensanche.
+Resultado del ejecutable de release: **48/48 escenas al 0,0000 %**.
 
 ## Legal
 
 Proyecto no oficial, sin ánimo de lucro, de investigación y preservación. No
 está afiliado ni avalado por Nintendo, Atari, Webfoot Technologies, Shueisha,
 Toei Animation ni ningún titular de los derechos de Dragon Ball. Dragon Ball y
-nombres, personajes, arte y datos del juego relacionados son marcas o
+los nombres, personajes, arte y datos del juego relacionados son marcas o
 copyright de sus respectivos dueños.
 
-**No se distribuye** ninguna ROM, BIOS GBA de Nintendo, partida ni dato
-extraído del juego. La carátula de la caja del launcher se incluye con fines
-de identificación. Ver [`baserom.md`](baserom.md) para los checksums y cómo
-aportar tus propios archivos legales.
+**No se distribuye** ninguna ROM, BIOS GBA de Nintendo, partida ni dato extraído
+del juego. La carátula del launcher se incluye con fines de identificación.
+Consulta [`baserom.md`](baserom.md) para los checksums y cómo aportar tus
+propios archivos legales.
 
 ## Licencia
 
 El código original de este proyecto se distribuye bajo la
 [PolyForm Noncommercial License 1.0.0](LICENSE) (autoría de mstan para el
-proyecto original; este fork la conserva). Las aportaciones de NovaPowers
-también se publican bajo esa misma licencia.
+proyecto original; este fork la conserva). Las aportaciones de NovaPowers se
+publican bajo esa misma licencia.
 
 ## Créditos
 
-- **Matthew Stan (mstan)** — recompilador gbarecomp, launcher recomp-ui y
+- **Matthew Stan (mstan)** — recompilador `gbarecomp`, launcher `recomp-ui` y
   estructura del proyecto original.
 - **R.A.I.D. — Retro AI Development** — comunidad de recompilación estática.
-- **NovaPowers** — este fork: fix de crash, cobertura expandida, soporte de 3
-  dumps, launcher EN/ES y actualización del mod Adaptive Widescreen a v1.0.1.
+- **NovaPowers** — este fork: fix de crash, cobertura ampliada, soporte de tres
+  dumps, launcher EN/ES, arreglo de audio, arranque rápido, autosave,
+  herramientas de partida y actualización del mod Adaptive Widescreen.
 
 ---
 
