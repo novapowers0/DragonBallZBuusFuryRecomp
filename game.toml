@@ -6620,3 +6620,88 @@ note = "Observed self-heal dispatch miss (computed-jump target); was only reacha
 addr = 0x0804F090
 mode = "thumb"
 note = "Observed self-heal dispatch miss (computed-jump target); was only reachable at runtime"
+
+[[extra_func]]
+addr = 0x080072DE
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x08003EB2
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x080049A8
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x080059E8
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x08039498
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x08039500
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x08003E56
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x08021762
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x080217AC
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x08021802
+mode = "thumb"
+note = "Observed self-heal dispatch miss during widescreen dialogue reproduction"
+
+[[extra_func]]
+addr = 0x080071F8
+mode = "thumb"
+note = "Observed Thumb dispatch miss while traversing the saved Other World scene"
+
+[[extra_func]]
+addr = 0x08007774
+mode = "thumb"
+note = "Observed self-heal dispatch miss while traversing the Other World overworld"
+
+[[extra_func]]
+addr = 0x0800D1E8
+mode = "thumb"
+note = "Observed self-heal dispatch miss while traversing the Other World overworld"
+
+[[extra_func]]
+addr = 0x0800D1F6
+mode = "thumb"
+note = "Observed self-heal dispatch miss while traversing the Other World overworld"
+
+[[extra_func]]
+addr = 0x0802266E
+mode = "thumb"
+note = "Observed self-heal dispatch miss while traversing the Other World overworld"
+
+[[extra_func]]
+addr = 0x0804F114
+mode = "thumb"
+note = "Observed self-heal dispatch miss while traversing the Other World overworld"
+
+[[extra_func]]
+addr = 0x0804F1E8
+mode = "thumb"
+note = "Observed self-heal dispatch miss while traversing the Other World overworld"

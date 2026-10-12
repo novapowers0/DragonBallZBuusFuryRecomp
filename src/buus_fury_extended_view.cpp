@@ -37,14 +37,19 @@ constexpr std::uint32_t kActorFixedY = 0x1A4u;
 constexpr std::size_t kFieldChunkBytes = 0x800u;
 constexpr int kFieldCacheBiasX = 8;
 constexpr int kFieldCacheBiasY = 48;
+// How far past the native camera rect the actor renderer is allowed to reach.
+//
+// This is deliberately NOT the full margin: it is only enough for a composite
+// actor that straddles the native edge to stay whole. Most field stages are
+// authored for 240px, so past that there is no background and revealing an
+// actor out there leaves it standing on empty space. Keeping the reach small
+// means an actor only appears in a margin when it is genuinely on its way in.
 constexpr int kActorCullPadding = 32;
 std::uint32_t g_field_objects[4] = {};
 std::unordered_map<
     std::uint32_t, std::array<std::uint8_t, kFieldChunkBytes>>
     g_decoded_chunks;
-std::unordered_map<std::uint32_t, std::pair<int, int>>
-    g_content_x_bounds;
-int g_render_view_shift = 0;
+bool g_single_chunk_bg3_scene = false;
 // The overworld layer cache is rebuilt when the game re-creates field objects
 // (new area / new game). Scanning ALL of EWRAM to re-find them is expensive, so
 // the scan is gated to at most once per composed frame. Without the gate, a
@@ -53,7 +58,9 @@ int g_render_view_shift = 0;
 // per margin pixel the tilemap provider visits — a multi-second freeze per
 // frame.
 std::uint32_t g_resolve_frame = 0;
-std::uint32_t g_last_scan_frame = 0;
+// Frame zero is a real composition (not an uninitialized marker). Start with
+// a distinct sentinel so the field objects are resolved on the first BG read.
+std::uint32_t g_last_scan_frame = std::numeric_limits<std::uint32_t>::max();
 
 struct ObjXHistory {
     std::uint16_t attr0_shape = 0;
@@ -427,6 +434,25 @@ void resolve_field_objects(gba::GbaBus* bus) {
     }
 }
 
+// Some Webfoot dialogue/cutscene screens install only BG3 as a field layer,
+// backed by one 32x32-tile resource chunk. That chunk is a screen-space
+// composition, not a scrolling field: extending it through the world-resource
+// provider exposes unrelated parts of the chunk in the widescreen margins and
+// tears the dialogue panel apart. Keep that scene's BGs in their native
+// 240-pixel viewport; the host margins remain transparent/backdrop-colored.
+// Larger or multi-layer resources continue through normal field expansion.
+bool is_single_chunk_bg3_scene(gba::GbaBus* bus) {
+    if (!bus) return false;
+    resolve_field_objects(bus);
+    if (!g_field_objects[3] || g_field_objects[0] ||
+        g_field_objects[1] || g_field_objects[2]) {
+        return false;
+    }
+    const std::uint32_t resource = ewram32(bus, g_field_objects[3] + 0x08u);
+    return mem8(bus, resource + 0x14u) == 1u &&
+        mem8(bus, resource + 0x15u) == 1u;
+}
+
 bool is_overworld(gba::GbaBus* bus) {
     if (!bus || !g_ws_active) return false;
     const std::uint16_t dispcnt = bus->io().read16(0x000u);
@@ -553,123 +579,35 @@ int layer_scroll_x(gba::GbaBus* bus, int bg, std::uint32_t object) {
         (hofs < kFieldCacheBiasX ? 256 : 0);
 }
 
-bool field_content_x_bounds(
-    gba::GbaBus* bus, std::uint32_t object,
-    int* out_min_x, int* out_max_x) {
-    if (!bus || !out_min_x || !out_max_x)
-        return false;
-    const std::uint32_t resource = ewram32(bus, object + 0x08u);
-    const auto cached = g_content_x_bounds.find(resource);
-    if (cached != g_content_x_bounds.end()) {
-        *out_min_x = cached->second.first;
-        *out_max_x = cached->second.second;
-        return true;
-    }
-
-    const unsigned chunk_columns = mem8(bus, resource + 0x14u);
-    const unsigned chunk_rows = mem8(bus, resource + 0x15u);
-    if (chunk_columns == 0u || chunk_rows == 0u)
-        return false;
-
-    int minimum_tile = std::numeric_limits<int>::max();
-    int maximum_tile = -1;
-    for (unsigned chunk_y = 0; chunk_y < chunk_rows; ++chunk_y) {
-        for (unsigned chunk_x = 0; chunk_x < chunk_columns; ++chunk_x) {
-            const unsigned chunk_index =
-                chunk_y * chunk_columns + chunk_x;
-            const std::uint32_t descriptor =
-                mem32(bus, resource + 0x18u + chunk_index * 4u);
-            const std::uint8_t* decoded =
-                decoded_field_chunk(bus, descriptor);
-            if (!decoded)
-                continue;
-            for (unsigned local_y = 0; local_y < 32u; ++local_y) {
-                for (unsigned local_x = 0; local_x < 32u; ++local_x) {
-                    const unsigned offset =
-                        (local_y * 32u + local_x) * 2u;
-                    const std::uint16_t entry =
-                        static_cast<std::uint16_t>(decoded[offset]) |
-                        static_cast<std::uint16_t>(
-                            decoded[offset + 1u] << 8);
-                    if ((entry & 0x03FFu) == 0u)
-                        continue;
-                    const int tile_x = static_cast<int>(
-                        chunk_x * 32u + local_x);
-                    minimum_tile = std::min(minimum_tile, tile_x);
-                    maximum_tile = std::max(maximum_tile, tile_x);
-                }
-            }
-        }
-    }
-    if (maximum_tile < minimum_tile)
-        return false;
-
-    const std::pair<int, int> bounds{
-        minimum_tile * 8, (maximum_tile + 1) * 8};
-    g_content_x_bounds.emplace(resource, bounds);
-    *out_min_x = bounds.first;
-    *out_max_x = bounds.second;
-    return true;
-}
-
-int calculate_view_shift(gba::GbaBus* bus) {
-    if (!bus)
-        return 0;
-    resolve_field_objects(bus);
-    int minimum = std::numeric_limits<int>::min();
-    int maximum = std::numeric_limits<int>::max();
-    bool constrained = false;
-    for (int bg = 0; bg < 4; ++bg) {
-        const std::uint32_t object = g_field_objects[bg];
-        int content_min = 0;
-        int content_max = 0;
-        if (!object || !field_content_x_bounds(
-                bus, object, &content_min, &content_max)) {
-            continue;
-        }
-        const int scroll = layer_scroll_x(bus, bg, object);
-        minimum = std::max(
-            minimum, static_cast<int>(g_ws_extra_left) +
-                content_min - scroll);
-        maximum = std::min(
-            maximum, content_max - scroll - 240 -
-                static_cast<int>(g_ws_extra_right));
-        constrained = true;
-    }
-    if (!constrained)
-        return 0;
-
-    // Keep the widened view inside the authored field. In ordinary areas the
-    // centered framing (zero) already fits. Near either field boundary slide
-    // the native viewport within the host output instead of requesting
-    // nonexistent map pixels and then manufacturing a mirrored/repeated fill.
-    if (minimum <= maximum) {
-        if (minimum > 0)
-            return minimum;
-        if (maximum < 0)
-            return maximum;
-        return 0;
-    }
-
-    // A field narrower than the requested host view cannot fill it. Center
-    // the authored resource; the tilemap provider will leave only the genuine
-    // out-of-field remainder transparent.
-    return minimum + (maximum - minimum) / 2;
-}
-
+// NOTE: this provider used to slide the native 240px viewport sideways inside
+// the widened host surface ("boundary framing") so the requested window stayed
+// inside the authored field. It depended on field_content_x_bounds(), whose
+// estimate is refined incrementally across frames and is routinely narrower
+// than the real authored extent, so acting on a non-final estimate relocated
+// the whole guest composition - field layers, HUD and screen-locked UI
+// together - by tens of pixels. In ordinary dialogue cutscenes that showed up
+// as a panel shoved off centre even though every layer agreed internally.
+//
+// The slide is gone: the native viewport always stays centred at
+// ox = (host_width - 240) / 2, and the authored margin chunks fill whatever
+// the field can genuinely reach. Columns the map does not cover resolve to
+// transparent rather than a repeated or clamped tilemap ring. The provider is
+// still registered because it owns the once-per-frame bookkeeping below.
 extern "C" int buus_fury_bg_x_provider(
     int bg, int output_x, int screen_y, int* out_hardware_x) {
     gba::GbaBus* bus = active_bus();
     if (!out_hardware_x || bg < 0 || bg > 3 || !is_overworld(bus))
         return 0;
 
-    const int hardware_x =
-        output_x - static_cast<int>(g_ws_extra_left);
     // Rendering visits BG3 first and begins at output (0,0). Refresh the
-    // framing once per composed frame rather than rescanning resource bounds
-    // in this per-pixel callback.
+    // per-frame framing state once per composed frame rather than rescanning
+    // resource bounds in this per-pixel callback.
     if (bg == 3 && output_x == 0 && screen_y == 0) {
-        g_render_view_shift = calculate_view_shift(bus);
+        // Once-per-frame bookkeeping, at the first BG3 output pixel.
+        // resolve_field_objects() is gated to once per frame, so calling it
+        // here is free.
+        resolve_field_objects(bus);
+        g_single_chunk_bg3_scene = is_single_chunk_bg3_scene(bus);
         ++g_resolve_frame;
         g_previous_obj_x = g_current_obj_x;
         g_current_obj_x = {};
@@ -681,21 +619,20 @@ extern "C" int buus_fury_bg_x_provider(
         }
     }
 
-    // This is placement of the native viewport within a wider host surface,
-    // not movement of the guest camera. Apply one screen-space displacement
-    // to every layer; each layer's own scroll already encodes its parallax.
-    const int shift = g_render_view_shift;
-    if (shift == 0)
-        return 0;
-
-    *out_hardware_x = hardware_x + shift;
-    return 1;
+    // Never displace a layer horizontally. The compositor already centres the
+    // native viewport and resolves field margins through the tilemap provider,
+    // so the guest's own hardware_x stays authoritative for every BG.
+    (void)bg;
+    return 0;
 }
 
 extern "C" int buus_fury_tilemap_provider(
     int bg, int hardware_x, int screen_y, std::uint16_t* out_entry) {
     gba::GbaBus* bus = active_bus();
     if (!out_entry || bg < 0 || bg > 3 || !is_overworld(bus))
+        return gba::kWsTilemapUnavailable;
+
+    if (g_single_chunk_bg3_scene)
         return gba::kWsTilemapUnavailable;
 
     if (!field_screen_entry(bus, bg, hardware_x, screen_y, out_entry))
@@ -708,6 +645,7 @@ extern "C" int buus_fury_obj_x_provider(
     std::uint16_t attr2, int* out_x) {
     gba::GbaBus* bus = active_bus();
     if (!out_x || !is_overworld(bus)) return 0;
+    if (g_single_chunk_bg3_scene) return 0;
 
     const int x = attr1 & 0x1FFu;
     const int y = attr0 & 0xFFu;
@@ -715,27 +653,57 @@ extern "C" int buus_fury_obj_x_provider(
     // Buu's Fury retains the Webfoot convention in which the first three OAM
     // slots are the top-left portrait/health/energy group. World actors begin
     // at slot 3 and must stay camera-relative.
+    //
+    // The compositor adds the left margin to every resolved sprite position
+    // (gba_ppu.cpp emits sx + ox), so this hook must hand back the plain
+    // native X. Subtracting g_ws_extra_left here displaced this group by a
+    // full margin: on a dialogue panel the first two pieces landed at output
+    // 8/72 while pieces 2..6 landed correctly at native_x + margin, tearing
+    // the panel in half. Returning the native X keeps the group inside the
+    // centred native viewport and aligned with the BG layers.
     if (oam_index >= 0 && oam_index <= 2 && x < 96 && y < 32) {
-        *out_x = x - static_cast<int>(g_ws_extra_left);
+        *out_x = x;
         return 1;
     }
 
-    const int view_shift = g_render_view_shift;
     // Expanded views make OAM X=256..511 ambiguous: those values may be
     // genuine coordinates in the new right margin or hardware-wrapped
-    // negative coordinates leaving through the left edge. Resolve against
-    // live actor anchors first. The renderer compacts surviving pieces into
-    // different OAM slots as a composite actor leaves, so the continuity
-    // fallback matches piece attributes across the complete previous frame
-    // rather than assuming that an OAM index is a persistent identity.
-    const int widened_right = 240 +
-        static_cast<int>(g_ws_extra_right) + view_shift;
+    // negative coordinates leaving through the left edge.
+    const int widened_right = 240 + static_cast<int>(g_ws_extra_right);
     int world_x = x <= widened_right ? x : x - 512;
     const int raw_y = y >= 160 ? y - 256 : y;
-    bool resolved = match_actor_x(bus, x, raw_y, &world_x);
-    if (oam_index >= 0 && oam_index < 128) {
-        if (!resolved) {
+
+    // Only raw OAM X values with bit 8 set (256..511) are actually
+    // ambiguous on real hardware: those are the only values a native
+    // 240px game can legitimately use to mean "just off the left edge"
+    // via 9-bit signed wraparound. Anything below 256 is an ordinary,
+    // already-correct on-screen X with nothing left to resolve --
+    // crucially this includes every screen-locked UI graphic (the
+    // dialogue window, portrait box, etc.), which has no reason to ever
+    // use the wraparound trick. Restricting actor/continuity matching to
+    // only the genuinely ambiguous values means static UI can no longer
+    // be "claimed" by a nearby world actor merely because both happened
+    // to pass through the same generic resolution path. This is the fix
+    // for the dialogue box tearing apart near the player: previously
+    // EVERY non-icon sprite -- including one with a perfectly
+    // unambiguous X -- was run through actor/history matching, and if
+    // that first, uncorrected frame produced a wrong answer (e.g. the
+    // dialogue box's own first frame, when it still had no history and
+    // the player happened to be nearby), the wrong position then got
+    // written into history and kept re-confirming itself every frame
+    // after, which is why reordering match priority alone did not fix
+    // it: the corruption was already baked in before history existed.
+    bool history_matched = false;
+    if (x >= 256) {
+        // Resolve against this OAM piece's OWN previous-frame continuity
+        // first, and only fall back to nearest-live-actor proximity when
+        // nothing matches. The renderer compacts surviving pieces into
+        // different OAM slots as a composite actor leaves, so this check
+        // matches piece attributes across the complete previous frame
+        // rather than assuming an OAM index is a persistent identity.
+        if (oam_index >= 0 && oam_index < 128) {
             int best_distance = std::numeric_limits<int>::max();
+            int best_x = world_x;
             for (const ObjXHistory& history : g_previous_obj_x) {
                 const bool same_piece =
                     history.valid &&
@@ -750,11 +718,23 @@ extern "C" int buus_fury_obj_x_provider(
                     const int dx = distance(candidate, history.resolved_x);
                     if (dx < best_distance) {
                         best_distance = dx;
-                        world_x = candidate;
+                        best_x = candidate;
                     }
                 }
             }
+            if (best_distance != std::numeric_limits<int>::max()) {
+                world_x = best_x;
+                history_matched = true;
+            }
         }
+        // Only a piece with no continuity at all (its genuine first frame
+        // on screen, and one whose X was genuinely ambiguous) falls back
+        // to the fuzzy nearest-live-actor guess.
+        if (!history_matched)
+            match_actor_x(bus, x, raw_y, &world_x);
+    }
+
+    if (oam_index >= 0 && oam_index < 128) {
         ObjXHistory& history =
             g_current_obj_x[static_cast<std::size_t>(oam_index)];
         history.attr0_shape = attr0 & 0xFF00u;
@@ -764,7 +744,7 @@ extern "C" int buus_fury_obj_x_provider(
         history.resolved_x = world_x;
         history.valid = true;
     }
-    *out_x = world_x - view_shift;
+    *out_x = world_x;
     return 1;
 }
 
@@ -773,6 +753,8 @@ extern "C" int buus_fury_bus_read_override(
     std::uint32_t original, std::uint32_t* out_value) {
     gba::GbaBus* bus = active_bus();
     if (!out_value || width != 4u || !is_overworld(bus))
+        return 0;
+    if (g_single_chunk_bg3_scene)
         return 0;
 
     // The actor renderer intersects each object's world rectangle with the
@@ -793,13 +775,11 @@ extern "C" int buus_fury_bus_read_override(
 
     remember_actor(bus, g_cpu.R[4]);
 
-    // Account for asymmetric boundary framing while leaving the camera,
-    // streaming, and actor coordinates byte-for-byte native.
-    const int view_shift = calculate_view_shift(bus);
+    // Widen only the visibility bounds the actor renderer uses, leaving the
+    // camera, streaming and actor coordinates byte-for-byte native. The native
+    // viewport is always centred, so the margins are symmetric extra reach.
     if (visibility_left && address == kCameraLeft) {
-        const int extension =
-            static_cast<int>(g_ws_extra_left) - view_shift +
-            kActorCullPadding;
+        const int extension = kActorCullPadding;
         // Clamp the left bound at 0 instead of subtracting into uint32
         // underflow. At the world's left edge (the start of a new game) the
         // native camera rect begins near 0; a wrapped bound makes the actor
@@ -810,9 +790,7 @@ extern "C" int buus_fury_bus_read_override(
         return 1;
     }
     if (visibility_right && address == kCameraRight) {
-        const int extension =
-            static_cast<int>(g_ws_extra_right) + view_shift +
-            kActorCullPadding;
+        const int extension = kActorCullPadding;
         *out_value = original + static_cast<std::uint32_t>(extension);
         return 1;
     }
@@ -825,10 +803,8 @@ void install_extended_view(std::uint32_t, std::uint32_t) {
     for (std::uint32_t& object : g_field_objects)
         object = 0u;
     g_decoded_chunks.clear();
-    g_content_x_bounds.clear();
-    g_render_view_shift = 0;
     g_resolve_frame = 0;
-    g_last_scan_frame = 0;
+    g_last_scan_frame = std::numeric_limits<std::uint32_t>::max();
     g_previous_obj_x = {};
     g_current_obj_x = {};
     g_actor_history = {};
@@ -842,8 +818,8 @@ void install_extended_view(std::uint32_t, std::uint32_t) {
     gba::g_ws_obj_attr_x_provider = &buus_fury_obj_x_provider;
     g_runtime_bus_read_override = &buus_fury_bus_read_override;
     std::fprintf(stderr,
-        "[buus-fury:view] authored BG0..BG3 field continuation + adaptive "
-        "boundary framing + exact chunk decode + edge HUD + expanded actor "
+        "[buus-fury:view] authored BG0..BG3 field continuation + centred native "
+        "viewport + exact chunk decode + edge HUD + expanded actor "
         "visibility enabled\n");
 }
 
