@@ -1,4 +1,4 @@
-# Dragon Ball Z: Buu's Fury Recomp — v0.0.4 WIP (Release ejecutable)
+# Dragon Ball Z: Buu's Fury Recomp — v0.0.5 WIP (Release ejecutable)
 
 Copyright (c) 2026 **NovaPowers**. Fork de
 [`mstan/DragonBallZBuusFuryRecomp`](https://github.com/mstan/DragonBallZBuusFuryRecomp),
@@ -33,22 +33,25 @@ archivos de tu copia legal.
    **EN/ES**; pulsa **Play**.
 4. En **Mods** puedes activar el **Adaptive Widescreen** (v1.0.4).
 
-## Novedades de este release (v0.0.4 WIP)
+## Novedades de este release (v0.0.5 WIP)
 
-- **Motor actualizado**: se fusionaron las mejoras recientes del framework
-  `gbarecomp` (+154 commits) y del launcher `recomp-ui` (+421 commits). Trae
-  mejoras de rendimiento, estabilidad, netplay y opciones nuevas de pantalla y
-  audio.
-- **Pantalla ancha intacta**: se revalidaron 108 escenas y la vista ensanchada
-  sigue siendo **idéntica en su zona central** a la imagen original (0,0000 %
-  de diferencia), así que ninguna mejora del motor rompió el mod.
-- **Compilación pública sin la carátula**: el código ya **no necesita** la
-  carátula española con copyright para compilar. Si falta, usa la carátula por
-  defecto en lugar de fallar.
-- **Mod Adaptive Widescreen v1.0.4** (antes v1.0.1).
-- **Nueva herramienta de verificación** (`tools/regression_check.ps1`): compara
-  automáticamente la vista ancha contra la nativa en todas tus escenas guardadas
-  y avisa si algo se rompe.
+- **Arreglada la calidad de sonido**: el audio se oía "petardeado" (crujidos
+  constantes) porque el motor mezcla a 32.768 Hz pero el PC lo reproducía como
+  si fuera 65.536 Hz, dejando el búfer siempre vacío. Ahora el motor comunica su
+  frecuencia real y el crujido desaparece. Ya no importa la opción de frecuencia
+  del lanzador: funciona con cualquiera.
+- **Las opciones de frecuencia de audio del lanzador ahora sí funcionan** de
+  verdad.
+- **Empaquetado**: el ZIP incluye un fichero `.sha256` para comprobar la
+  integridad de la descarga.
+
+Se mantiene de la versión anterior:
+
+- Motor actualizado (framework `gbarecomp` +154 commits, launcher `recomp-ui`
+  +421 commits).
+- Pantalla ancha intacta: **48/48 escenas al 0,0000 %** en el ejecutable de
+  release.
+- Compilación pública sin la carátula con copyright.
 
 ## Bugs conocidos
 
@@ -57,7 +60,9 @@ archivos de tu copia legal.
 - Las cajas de texto de algunas cutscenes pueden presentar artefactos al
   ensanchar la vista (investigación en curso).
 - Los personajes compuestos (Goku montado, vehículos, etc.) pueden verse
-  ligeramente desplazados; también ocurre a 240 px y es anterior a esta versión.
+  ligeramente desplazados; también ocurre a 240 px.
+- El modo multijugador (link cable) todavía arrastra la suposición antigua de
+  frecuencia de audio.
 
 ## Legal
 
