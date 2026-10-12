@@ -39,6 +39,23 @@ const gbarecomp::CheatPreset kCheats[] = {
      "830010CA FFFF"},
 };
 
+// In-game Editor: numeric fields the player can read and change directly.
+// Same shared BG3E RAM layout as the cheats (first character slot = the stat
+// block the cheat codes write first).
+const gbarecomp::GbaEditField kEditFields[] = {
+    {"Zenie", "Your money.", 0x0300155Cu, 32, 0, 99999999, 1000},
+    {"HP (slot 1)", "Current HP of the first character.",
+     0x03001576u, 16, 0, 9999, 100},
+    {"Max HP (slot 1)", "Maximum HP of the first character.",
+     0x03001578u, 16, 0, 9999, 100},
+    {"EP (slot 1)", "Current EP of the first character.",
+     0x0300157Au, 16, 0, 9999, 100},
+    {"Max EP (slot 1)", "Maximum EP of the first character.",
+     0x0300157Cu, 16, 0, 9999, 100},
+    {"EXP (slot 1)", "Experience of the first character.",
+     0x03001584u, 32, 0, 999999999, 1000},
+};
+
 void print_usage() {
     std::printf(
         "DragonBallZBuusFuryRecomp [--bios <path>] [--rom <path>] "
@@ -102,6 +119,11 @@ int main(int argc, char** argv) {
     opts.expose_cheats = true;
     opts.cheat_presets = kCheats;
     opts.cheat_preset_count = sizeof(kCheats) / sizeof(kCheats[0]);
+
+    // In-game Editor: read/change money and the first character's stats.
+    opts.expose_editor = true;
+    opts.edit_fields = kEditFields;
+    opts.edit_field_count = sizeof(kEditFields) / sizeof(kEditFields[0]);
 
     std::vector<std::string> args(argv, argv + argc);
 
