@@ -93,6 +93,9 @@ int main(int argc, char** argv) {
     opts.rewind_capture_interval_frames = 15;
     opts.autosave_interval_seconds = 30;
     opts.resume_suspend_state_on_launch = true;
+    // Press Start + Select in game to open the runtime menu (cheats, save
+    // states, fast-forward, rewind).
+    opts.in_game_menu_start_select = true;
 
     // Player-facing cheats: an in-game "Cheats" menu of optional CodeBreaker
     // codes (all disabled by default).
