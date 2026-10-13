@@ -6705,3 +6705,18 @@ note = "Observed self-heal dispatch miss while traversing the Other World overwo
 addr = 0x0804F1E8
 mode = "thumb"
 note = "Observed self-heal dispatch miss while traversing the Other World overworld"
+
+[[extra_func]]
+addr = 0x080072D6
+mode = "thumb"
+note = "Observed self-heal dispatch miss; bridged x1 (computed-jump target)"
+
+[[extra_func]]
+addr = 0x08012D64
+mode = "thumb"
+note = "Observed self-heal dispatch miss; bridged x1 (computed-jump target)"
+
+[[extra_func]]
+addr = 0x0805135C
+mode = "thumb"
+note = "Observed self-heal dispatch miss; bridged x1 (computed-jump target)"

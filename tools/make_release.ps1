@@ -123,8 +123,11 @@ if ($LASTEXITCODE -ne 0) { throw "Overlay toolchain staging failed ($LASTEXITCOD
 @"
 # $gameTitle - GBA static recompilation (Windows x64)
 
-This v$Version preview runs the clean USA retail game through gbarecomp with a
-recomp-ui launcher and an optional Adaptive Widescreen mod.
+This v$Version preview runs the USA retail game through gbarecomp with a
+recomp-ui launcher and an optional Adaptive Widescreen mod. Three equivalent
+dumps of the same cart are accepted (GoodTools/RetroAchievements, No-Intro and
+the Spanish text translation); all three are code-identical, so one build
+serves them.
 
 This experimental build is a byproduct of developing and testing gbarecomp.
 It has no affiliation with or endorsement from the game publisher.
@@ -134,10 +137,35 @@ It has no affiliation with or endorsement from the game publisher.
 1. Extract this entire folder and keep its DLLs, assets, mods, and
    overlay_toolchain beside $target.exe.
 2. Run $target.exe.
-3. Select your legally obtained clean $gameTitle (USA) ROM.
-   Expected SHA-1: $expectedSha1
+3. Select your legally obtained $gameTitle (USA) ROM. Accepted dumps:
+   - GoodTools / RetroAchievements - SHA-1
+     f1c4b07554d2a3b1ad2f325307051e775ce68087 (CRC32 01C1707F)
+   - No-Intro - SHA-1 e65738e9d67688309f09811a54f495523ec9aada
+     (CRC32 DCF23468)
+   - Spanish text translation - SHA-1
+     ee667f656f6c3a128b9d59c657b3686e58b23eb5
 4. Select your legally obtained retail gba_bios.bin under Settings > System.
 5. Open Mods to opt into Adaptive Widescreen, then select PLAY.
+
+## Features in this build
+
+- Fast boot: skips the BIOS intro by default (reversible with
+  --no-bios-skip-intro; the real BIOS still runs for IRQ/SWI).
+- Autosave: a full snapshot every 30 s; an interrupted session resumes on the
+  next launch. A clean exit does not resume.
+- Assist Tools (in-game menu): save states (F1-F9 / Shift+F1-F9),
+  fast-forward and 8-second rewind.
+- Cheats (in-game menu): curated CodeBreaker Advance presets for this cart
+  (max Zenie, infinite HP/EP, max EXP, infinite fusion time, all Dragon Balls).
+  All off by default.
+- Editor (in-game menu): read and change live values (Zenie, HP/EP and their
+  maxima, EXP, Attack, Dragon Balls).
+- Five screen colour profiles (Raw, Unlit, Frontlit, Backlit, Classic).
+
+## In-game menu
+
+Press Start + Select together to open the in-game menu (Assist Tools, Cheats,
+Editor). The combo is consumed by the host and never reaches the game.
 
 Display, audio, input, and enhancement settings persist locally. Keyboard
 defaults: arrows = D-pad, Z = A, X = B, Enter = Start, Backspace = Select,
@@ -147,8 +175,8 @@ The ROM and retail GBA BIOS are not included. Supply your own dumps.
 Interactive play has no implicit runtime step limit; only an explicit
 ``--steps`` option applies a deterministic upper bound.
 
-Project: https://github.com/mstan/$target
-Engine: https://github.com/mstan/gbarecomp
+Project: https://github.com/novapowers0/$target
+Engine: https://github.com/novapowers0/gbarecomp
 "@ | Out-File -LiteralPath (Join-Path $stage 'README.md') -Encoding utf8
 
 $forbidden = Get-ChildItem -LiteralPath $stage -Recurse -File | Where-Object {

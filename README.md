@@ -31,10 +31,17 @@ de tu copia legal. Se aceptan tres dumps equivalentes del mismo cartucho
 - **Autosave con recuperación**: guarda una instantánea cada 30 s y reanuda la
   partida tras un cierre inesperado.
 - **Herramientas de partida**: estados de guardado, avance rápido y rebobinado.
+- **Cheats dentro del juego**: presets de CodeBreaker Advance (dinero, HP/EP,
+  EXP, tiempo de fusión, Bolas de Dragón), todos apagados por defecto.
+- **Editor de partida**: lee y cambia valores en vivo (dinero, HP/EP y sus
+  máximos, EXP, Ataque y Bolas de Dragón).
+- **Menú in-game con Start + Select**: abre herramientas, cheats y editor sin
+  salir del juego.
 - **Arranque rápido**: salta la intro del BIOS (reversible).
 - **Cinco perfiles de color de pantalla**: Raw, Unlit, Frontlit, Backlit y Classic.
 - **Launcher EN/ES** con carátula española cuando se detecta la traducción.
-- **Audio corregido** (el crujido constante del mezclador original).
+- **Audio corregido** (el crujido constante del mezclador original) y audio
+  multijugador a la frecuencia real del mezclador.
 
 ## Novedades de este fork
 
@@ -48,6 +55,11 @@ de tu copia legal. Se aceptan tres dumps equivalentes del mismo cartucho
 | **Cobertura estática ampliada** | La zona inicial del overworld valida **FULLY STATIC** (0 misses, 0 interpretadas). |
 | **Tres dumps equivalentes** | GoodTools/RA (`f1c4…`), No-Intro (`e657…`) y traducción al español (`ee667…`); un único código generado los sirve. |
 | **Launcher EN/ES** | Selector de idioma cuando hay dump español, etiqueta de región "USA + Mod SPA" y carátula española. |
+| **Cheats (in-game)** | Motor genérico de códigos **CodeBreaker Advance** con menú propio y presets de este cart; todos apagados por defecto. |
+| **Editor de partida** | Sección **Editor** en el menú del juego: lee y escribe valores vivos de la RAM (dinero, HP/EP, EXP, Ataque, Bolas de Dragón). |
+| **Start + Select** | Atajo del anfitrión que abre el menú in-game (herramientas, cheats, editor) sin filtrarse al juego; se indica en el launcher. |
+| **Audio multijugador** | El modo link cable usaba 65.536 Hz fijos; ahora publica la frecuencia real del mezclador, igual que en un jugador. |
+| **Fork sincronizado** | Al día con `mstan/DragonBallZBuusFuryRecomp`, incluido su escritor de ZIP portable (nombres con `/` para Linux/Steam Deck). |
 
 ## Estado
 
@@ -88,6 +100,7 @@ Actívalo en la página **Mods** del launcher.
 
 - **Shift+F1–F9**: guardar estado · **F1–F9**: cargar estado.
 - **Avance rápido** y **rebobinado**: desde el menú de herramientas del juego.
+- **Start + Select**: abre el menú in-game (herramientas, cheats y editor).
 - **Autosave**: automático cada 30 s mientras juegas en ventana.
 
 Los controles se cambian desde el launcher.
