@@ -31,7 +31,7 @@ $build = Join-Path $root $BuildDir
 $out = Join-Path $root 'release-stage'
 $target = 'DragonBallZBuusFuryRecomp'
 $gameTitle = "Dragon Ball Z: Buu's Fury"
-$expectedSha1 = 'e65738e9d67688309f09811a54f495523ec9aada'
+$expectedSha1 = 'f1c4b07554d2a3b1ad2f325307051e775ce68087'
 $stageName = "$target-windows-x64-v$Version"
 $stage = Join-Path $out $stageName
 $zip = Join-Path $out "$stageName.zip"
@@ -106,10 +106,15 @@ if (-not (Test-Path -LiteralPath (Join-Path $assets 'img\boxart.tga'))) {
 Copy-Item -LiteralPath $assets -Destination $stage -Recurse
 
 $mods = Join-Path $build 'mods'
-if (-not (Test-Path -LiteralPath (Join-Path $mods 'packages'))) {
+$modPackages = Join-Path $mods 'packages'
+if (-not (Test-Path -LiteralPath $modPackages)) {
     throw "Preloaded mod catalog is missing: $mods"
 }
-Copy-Item -LiteralPath $mods -Destination $stage -Recurse
+$stageMods = Join-Path $stage 'mods'
+New-Item -ItemType Directory -Force -Path $stageMods | Out-Null
+# `mods/state.toml` is per-machine enablement state.  Package the catalog,
+# never the developer's local feature choices.
+Copy-Item -LiteralPath $modPackages -Destination $stageMods -Recurse
 
 & (Join-Path $engine 'tools\fetch_tcc.ps1') `
     -Toolchain (Join-Path $stage 'overlay_toolchain') -EngineRoot $engine
@@ -118,7 +123,7 @@ if ($LASTEXITCODE -ne 0) { throw "Overlay toolchain staging failed ($LASTEXITCOD
 @"
 # $gameTitle - GBA static recompilation (Windows x64)
 
-This v$Version preview runs the USA retail game through gbarecomp with a
+This v$Version preview runs the clean USA retail game through gbarecomp with a
 recomp-ui launcher and an optional Adaptive Widescreen mod.
 
 This experimental build is a byproduct of developing and testing gbarecomp.
@@ -129,7 +134,7 @@ It has no affiliation with or endorsement from the game publisher.
 1. Extract this entire folder and keep its DLLs, assets, mods, and
    overlay_toolchain beside $target.exe.
 2. Run $target.exe.
-3. Select your legally obtained $gameTitle (USA) ROM.
+3. Select your legally obtained clean $gameTitle (USA) ROM.
    Expected SHA-1: $expectedSha1
 4. Select your legally obtained retail gba_bios.bin under Settings > System.
 5. Open Mods to opt into Adaptive Widescreen, then select PLAY.
@@ -162,15 +167,66 @@ if ($forbidden) {
 }
 
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-$hashFile = "$zip.sha256"
-"$hash  $(Split-Path -Leaf $zip)" | Out-File -LiteralPath $hashFile -Encoding ascii -NoNewline
-Add-Content -LiteralPath $hashFile -Value "`n"
+# ZIP entry names must always use '/', regardless of the host OS.
+# Compress-Archive preserves Windows backslashes, which POSIX extractors
+# treat as literal filename characters rather than directory separators -- so
+# a Linux / Steam Deck / Proton user gets files literally named
+# "assets\fonts\LatoLatin-Regular.ttf" (and "mods\packages\..." where the
+# game ships a mod catalog), the nested trees are never created, and the
+# ImGui launcher finds neither its fonts nor its mods. Write portably here,
+# then verify before anyone can publish it.
+# (Convention ported from snesrecomp/SuperMarioWorldRecomp.)
+$rzStageFull = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $stage).Path)
+$rzZipFull = [IO.Path]::GetFullPath($zip)
+$rzPrefix = $rzStageFull.TrimEnd('\') + '\'
+$rzFiles = @(Get-ChildItem -LiteralPath $stage -File -Recurse |
+    Sort-Object FullName)
+$rzArchive = [IO.Compression.ZipFile]::Open(
+    $rzZipFull, [IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($rzFile in $rzFiles) {
+        $rzFull = [IO.Path]::GetFullPath($rzFile.FullName)
+        if (-not $rzFull.StartsWith(
+                $rzPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to archive a file outside the release stage: $rzFull"
+        }
+        $rzName = $rzFull.Substring($rzPrefix.Length).Replace('\', '/')
+        if ($rzName.StartsWith('/') -or $rzName -match '(^|/)..(/|$)') {
+            throw "Unsafe ZIP entry name: $rzName"
+        }
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $rzArchive, $rzFull, $rzName,
+            [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+    }
+} finally {
+    $rzArchive.Dispose()
+}
 
+# Read the archive back and reject non-portable entry names outright, so a
+# regression in the writer cannot ship a Windows-only zip again.
+$rzArchive = [IO.Compression.ZipFile]::OpenRead($rzZipFull)
+try {
+    $rzBad = @($rzArchive.Entries | Where-Object {
+        $_.FullName.Contains('\') -or
+        $_.FullName.StartsWith('/') -or
+        $_.FullName -match '(^|/)..(/|$)'
+    })
+    if ($rzBad.Count -ne 0) {
+        throw "ZIP contains non-portable entry names: $(
+            ($rzBad | ForEach-Object FullName) -join ', ')"
+    }
+    if ($rzArchive.Entries.Count -ne $rzFiles.Count) {
+        throw "ZIP entry count mismatch: expected $($rzFiles.Count), got $(
+            $rzArchive.Entries.Count)"
+    }
+} finally {
+    $rzArchive.Dispose()
+}
 Write-Host "--- $stageName ---"
 Get-ChildItem -LiteralPath $stage | Select-Object Name, Length | Out-Host
 Get-Item -LiteralPath $zip | Select-Object Name, Length | Out-Host
-Write-Host "sha256: $hash"
-Write-Host "checksum file: $hashFile"
+Get-FileHash -LiteralPath $zip -Algorithm SHA256 |
+    Select-Object Algorithm, Hash, Path | Out-Host
