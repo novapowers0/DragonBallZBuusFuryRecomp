@@ -19,6 +19,13 @@ enhancement must be a pure superset of the native image: the authored 240x160
 region (the strip the two share) has to be identical, so anything above
 -MaxDiffPercent is a rendering regression.
 
+One deliberate exception: the adaptive-view mod anchors the top-left status
+group (portrait/health/energy, native rect x<96,y<32) to the physical left
+edge of expanded views (Legacy of Goku II parity), so that group's native
+pixels are expected to differ. Every pixel outside that group must still be
+pixel-exact; the group itself is validated by dedicated edge-position
+screenshots in the session notes.
+
 Exit code is non-zero if any state exceeds the tolerance or fails to run, which
 makes this usable as a pre-release gate.
 
@@ -192,6 +199,10 @@ function Compare-Strip([string]$widePng, [string]$nativePng) {
         $diff = 0
         for ($y = 0; $y -lt $height; $y++) {
             for ($x = 0; $x -lt $native.Width; $x++) {
+                # Skip the status group's native rect: the mod deliberately
+                # relocates it to the physical left edge in expanded views
+                # (see header). Its world pixels must still match.
+                if ($x -lt 96 -and $y -lt 32) { continue }
                 $a = $wide.GetPixel($offsetX + $x, $y)
                 $b = $native.GetPixel($x, $y)
                 $d = [Math]::Max(
