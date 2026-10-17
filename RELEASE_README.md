@@ -1,4 +1,4 @@
-# Dragon Ball Z: Buu's Fury Recomp — v0.0.5 WIP (Release ejecutable)
+# Dragon Ball Z: Buu's Fury Recomp — v0.0.6 WIP (Release ejecutable)
 
 Copyright (c) 2026 **NovaPowers**. Fork de
 [`mstan/DragonBallZBuusFuryRecomp`](https://github.com/mstan/DragonBallZBuusFuryRecomp),
@@ -33,23 +33,30 @@ archivos de tu copia legal.
    **EN/ES**; pulsa **Play**.
 4. En **Mods** puedes activar el **Adaptive Widescreen** (v1.0.4).
 
-## Novedades de este release (v0.0.5 WIP)
+## Novedades de este release (v0.0.6 WIP)
 
-- **Arreglada la calidad de sonido**: el audio se oía "petardeado" (crujidos
-  constantes) porque el motor mezcla a 32.768 Hz pero el PC lo reproducía como
-  si fuera 65.536 Hz, dejando el búfer siempre vacío. Ahora el motor comunica su
-  frecuencia real y el crujido desaparece. Ya no importa la opción de frecuencia
-  del lanzador: funciona con cualquiera.
-- **Las opciones de frecuencia de audio del lanzador ahora sí funcionan** de
-  verdad.
-- **Empaquetado**: el ZIP incluye un fichero `.sha256` para comprobar la
-  integridad de la descarga.
+- **Arranque fiel al BIOS real**: el arranque rápido ahora deja `DISPCNT` en
+  *forced blank* y `POSTFLG` activado igual que el BIOS real (y mGBA), y el PPU
+  arranca en la fase skipBios de mGBA. Además, los logos iniciales avanzan
+  rápido hasta el título (~1 s en lugar de ~8) sin tocar los fotogramas del juego.
+- **Multiplicadores de cheats**: EXP/Zenie ×2/×4, daño recibido ×2/×0.5 y una
+  curva de XP lenta, agrupados en *Cheats - Multipliers* y *Cheats - Difficulty*
+  (todos apagados por defecto).
+- **Márgenes más rápidos**: el render de pantalla ancha resuelve cada tile de
+  campo una vez por fotograma (≈ +8 % a 480 px), idéntico píxel a píxel.
+- **Start + Select**: A + B + Start + Select sigue reiniciando el juego (el
+  reset del BIOS pasa al juego) mientras Start + Select abre el menú in-game.
+- **Suavizado de audio opcional**: `GBARECOMP_AUDIO_SMOOTH=1`.
 
 Se mantiene de la versión anterior:
 
-- Motor actualizado (framework `gbarecomp` +154 commits, launcher `recomp-ui`
-  +421 commits).
-- Pantalla ancha intacta: **48/48 escenas al 0,0000 %** en el ejecutable de
+- **Audio limpio**: el motor mezcla a 32.768 Hz y comunica su frecuencia real;
+  el crujido constante desaparece y el audio multijugador (link cable) también
+  usa la frecuencia real del mezclador.
+- **Empaquetado**: el ZIP incluye un fichero `.sha256` para comprobar la
+  integridad de la descarga.
+- Motor actualizado (framework `gbarecomp` + launcher `recomp-ui`).
+- Pantalla ancha intacta: **57/57 escenas al 0,0000 %** en el ejecutable de
   release.
 - Compilación pública sin la carátula con copyright.
 
@@ -61,8 +68,6 @@ Se mantiene de la versión anterior:
   ensanchar la vista (investigación en curso).
 - Los personajes compuestos (Goku montado, vehículos, etc.) pueden verse
   ligeramente desplazados; también ocurre a 240 px.
-- El modo multijugador (link cable) todavía arrastra la suposición antigua de
-  frecuencia de audio.
 
 ## Legal
 
