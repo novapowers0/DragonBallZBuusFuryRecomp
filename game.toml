@@ -6720,3 +6720,81 @@ note = "Observed self-heal dispatch miss; bridged x1 (computed-jump target)"
 addr = 0x0805135C
 mode = "thumb"
 note = "Observed self-heal dispatch miss; bridged x1 (computed-jump target)"
+
+# Observed while replaying the full-game TAS (TASVideos USA-synced movie):
+# dispatch misses that the finder left as tail-dispatch/fall-through targets,
+# including one genuine function entry (0x0801A23A) whose bridge ran away.
+[[extra_func]]
+addr = 0x080064E6
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x08006552
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x08006556
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x08016BE2
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x08016BEA
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x0801A23A
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay; genuine function entry left as a tail-dispatch target (bridge ran away)"
+
+[[extra_func]]
+addr = 0x0801A256
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay (interior target of 0x0801A23A)"
+
+[[extra_func]]
+addr = 0x0801D7C0
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x0801D7D0
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x0801D9A2
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x0801DA8A
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x0801DC20
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x0801DE50
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x0801DE64
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
+
+[[extra_func]]
+addr = 0x0801DFCE
+mode = "thumb"
+note = "Observed self-heal dispatch miss during full-game TAS replay"
