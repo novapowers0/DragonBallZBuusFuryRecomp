@@ -47,6 +47,8 @@ _*
 *.log
 *.bmp
 *.png
+# Documentation artwork (the README logo and screenshots) is tracked.
+!docs/*.png
 *.rgb
 *.csv
 *.frag
