@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <limits>
+#include <list>
 #include <unordered_map>
 #include <utility>
 
@@ -34,6 +35,15 @@ constexpr std::uint32_t kCameraX = 0x030019CCu;
 constexpr std::uint32_t kCameraY = 0x030019D0u;
 constexpr std::uint32_t kActorFixedX = 0x1A0u;
 constexpr std::uint32_t kActorFixedY = 0x1A4u;
+// Global that holds the object pointer of the currently controlled hero.
+// Verified by TCP probes in two different areas (King Kai's field and a late
+// map): the pointer resolves to the only object of the hero class
+// (vtable 0x0804C9F0) and tracks the actor the camera follows.
+constexpr std::uint32_t kControlledActor = 0x03001B94u;
+// The hero's native walking step is 0x160 fixed-point units per frame
+// (1.375 px measured over 14 frames). Movement turbo scales an ordinary step
+// by 1.5x; anything larger is a teleport/respawn/area load and is ignored.
+constexpr std::int32_t kWalkStepLimit = 0x300;
 constexpr std::size_t kFieldChunkBytes = 0x800u;
 constexpr int kFieldCacheBiasX = 8;
 constexpr int kFieldCacheBiasY = 48;
@@ -46,9 +56,44 @@ constexpr int kFieldCacheBiasY = 48;
 // means an actor only appears in a margin when it is genuinely on its way in.
 constexpr int kActorCullPadding = 32;
 std::uint32_t g_field_objects[4] = {};
-std::unordered_map<
-    std::uint32_t, std::array<std::uint8_t, kFieldChunkBytes>>
-    g_decoded_chunks;
+bool g_turbo_active = false;
+std::uint32_t g_turbo_player = 0u;
+// Decoded-chunk cache with a most-recently-used bound: a long session streams
+// thousands of distinct descriptors (they live in ROM, so entries can never
+// go stale), and this keeps memory flat. Evicting one only costs a re-decode.
+constexpr std::size_t kDecodedChunkCacheCap = 384;
+struct DecodedChunkCache {
+    struct Entry {
+        std::array<std::uint8_t, kFieldChunkBytes> pixels{};
+        std::list<std::uint32_t>::iterator lru{};
+    };
+    std::unordered_map<std::uint32_t, Entry> map;
+    std::list<std::uint32_t> order;  // front = most recently used
+    void clear() {
+        map.clear();
+        order.clear();
+    }
+};
+DecodedChunkCache g_decoded_chunks;
+
+// Per-frame margin tile-entry memo. The tilemap provider is invoked once per
+// margin pixel (~50K per composed frame at 480 pixels), and every 8x8 screen
+// tile resolves to the same authored 8x8 field tile, so field_entry() would
+// recompute an identical result dozens of times per frame. The bus state it
+// reads (layer scroll, chunk-slot owners, decoded chunks) is stable within a
+// composed frame, so a direct-mapped memo keyed by (layer object, world tile)
+// and tagged with the frame generation is exact; a collision merely re-resolves.
+constexpr std::size_t kFieldTileCacheSize = 2048u;  // power of two
+struct FieldTileCacheSlot {
+    std::uint32_t generation = 0u;
+    std::uint32_t object = 0u;
+    std::int32_t tile_x = 0;
+    std::int32_t tile_y = 0;
+    std::uint16_t entry = 0u;
+    bool valid = false;
+};
+FieldTileCacheSlot g_field_tile_cache[kFieldTileCacheSize];
+
 bool g_single_chunk_bg3_scene = false;
 // The overworld layer cache is rebuilt when the game re-creates field objects
 // (new area / new game). Scanning ALL of EWRAM to re-find them is expensive, so
@@ -371,16 +416,26 @@ bool decode_field_chunk(
 
 const std::uint8_t* decoded_field_chunk(
     gba::GbaBus* bus, std::uint32_t descriptor) {
-    const auto found = g_decoded_chunks.find(descriptor);
-    if (found != g_decoded_chunks.end())
-        return found->second.data();
+    DecodedChunkCache& cache = g_decoded_chunks;
+    const auto found = cache.map.find(descriptor);
+    if (found != cache.map.end()) {
+        cache.order.splice(cache.order.begin(), cache.order,
+                           found->second.lru);
+        return found->second.pixels.data();
+    }
 
-    std::array<std::uint8_t, kFieldChunkBytes> decoded{};
-    if (!decode_field_chunk(bus, descriptor, &decoded))
+    DecodedChunkCache::Entry entry;
+    if (!decode_field_chunk(bus, descriptor, &entry.pixels))
         return nullptr;
-    const auto inserted =
-        g_decoded_chunks.emplace(descriptor, std::move(decoded));
-    return inserted.first->second.data();
+    cache.order.push_front(descriptor);
+    entry.lru = cache.order.begin();
+    const auto inserted = cache.map.emplace(descriptor, std::move(entry));
+    if (cache.map.size() > kDecodedChunkCacheCap) {
+        const std::uint32_t victim = cache.order.back();
+        cache.order.pop_back();
+        cache.map.erase(victim);
+    }
+    return inserted.first->second.pixels.data();
 }
 
 bool field_object_valid(
@@ -470,12 +525,9 @@ bool is_overworld(gba::GbaBus* bus) {
     return true;
 }
 
-bool field_entry(
+bool field_entry_resolve(
     gba::GbaBus* bus, std::uint32_t object, int world_x, int world_y,
     std::uint16_t* out_entry) {
-    if (!bus || !out_entry || world_x < 0 || world_y < 0)
-        return false;
-
     const std::uint32_t resource = ewram32(bus, object + 0x08u);
     const unsigned chunk_columns = mem8(bus, resource + 0x14u);
     const unsigned chunk_rows = mem8(bus, resource + 0x15u);
@@ -536,6 +588,47 @@ bool field_entry(
     return true;
 }
 
+// Margin tile-entry memo wrapper (see g_field_tile_cache). Resolving the same
+// (layer, world tile) more than once in a composed frame returns the memoized
+// result; the range guard stays here so an out-of-range coordinate never
+// touches the cache.
+bool field_entry(
+    gba::GbaBus* bus, std::uint32_t object, int world_x, int world_y,
+    std::uint16_t* out_entry) {
+    if (!bus || !out_entry || world_x < 0 || world_y < 0)
+        return false;
+    static const bool cache_enabled = []() {
+        const char* v = std::getenv("GBARECOMP_MARGIN_CACHE");
+        return !(v && v[0] == '0');
+    }();
+    if (!cache_enabled)
+        return field_entry_resolve(bus, object, world_x, world_y, out_entry);
+    const std::int32_t tile_x = static_cast<std::int32_t>(world_x) >> 3;
+    const std::int32_t tile_y = static_cast<std::int32_t>(world_y) >> 3;
+    const std::uint32_t hash =
+        (object * 2654435761u) ^
+        (static_cast<std::uint32_t>(tile_x) * 2246822519u) ^
+        (static_cast<std::uint32_t>(tile_y) * 3266489917u);
+    FieldTileCacheSlot& slot =
+        g_field_tile_cache[(hash >> 8) & (kFieldTileCacheSize - 1u)];
+    if (slot.generation == g_resolve_frame && slot.object == object &&
+        slot.tile_x == tile_x && slot.tile_y == tile_y) {
+        if (!slot.valid)
+            return false;
+        *out_entry = slot.entry;
+        return true;
+    }
+    std::uint16_t entry = 0u;
+    const bool ok = field_entry_resolve(bus, object, world_x, world_y, &entry);
+    slot.generation = g_resolve_frame;
+    slot.object = object;
+    slot.tile_x = tile_x;
+    slot.tile_y = tile_y;
+    slot.entry = entry;
+    slot.valid = ok;
+    return ok;
+}
+
 bool field_screen_entry(
     gba::GbaBus* bus, int bg, int hardware_x, int screen_y,
     std::uint16_t* out_entry) {
@@ -579,6 +672,133 @@ int layer_scroll_x(gba::GbaBus* bus, int bg, std::uint32_t object) {
         (hofs < kFieldCacheBiasX ? 256 : 0);
 }
 
+// ── Widescreen scene census (development instrumentation) ─────────────
+// GBARECOMP_WS_CENSUS=<csv> records, once per composed frame (sampled), how
+// the frame classifies and how far every authored field layer extends beyond
+// the native 240px viewport at the current scroll. The layer-space reach is
+// converted through each layer's parallax scale so the CSV reports real
+// revealable screen pixels, independent of the host window width. Used to
+// measure widescreen coverage across a full-game TAS replay; fully inert
+// unless the environment variable is set. Reads bus state only.
+std::FILE* g_census_file = nullptr;
+unsigned g_census_interval = 60;
+unsigned long long g_census_frame_logged = ~0ull;
+unsigned long long g_census_next_sample = 0;
+unsigned g_census_signature = ~0u;
+
+// Repeats is_overworld()'s DISPCNT/BG-slot test without its expanded-view
+// gate: a native-width census replay never expands the view, but the field
+// frames (and their authored extents) are exactly what it must classify.
+bool census_field_scene(gba::GbaBus* bus) {
+    if (!bus) return false;
+    const std::uint16_t dispcnt = bus->io().read16(0x000u);
+    if ((dispcnt & 7u) != 0u || (dispcnt & 0x1F40u) != 0x1F40u)
+        return false;
+    for (int bg = 0; bg < 4; ++bg) {
+        const std::uint16_t cnt =
+            bus->io().read16(0x008u + static_cast<std::uint32_t>(bg * 2));
+        if (((cnt >> 8) & 0x1Fu) != static_cast<unsigned>(28 + bg) ||
+            ((cnt >> 14) & 3u) != 0u) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void census_configure() {
+    const char* path = std::getenv("GBARECOMP_WS_CENSUS");
+    if (!path || !path[0]) return;
+    if (const char* iv = std::getenv("GBARECOMP_WS_CENSUS_INTERVAL")) {
+        const int v = std::atoi(iv);
+        if (v > 0) g_census_interval = static_cast<unsigned>(v);
+    }
+    g_census_file = std::fopen(path, "wb");
+    if (!g_census_file) {
+        std::fprintf(stderr, "ws_census=FAILED to open \"%s\"\n", path);
+        return;
+    }
+    std::fprintf(g_census_file,
+        "frame,mode,field,single,layers,cam_x,cam_left,"
+        "cam_right,min_left,min_right,"
+        "l0_scroll,l0_cols,l0_rows,l1_scroll,l1_cols,l1_rows,"
+        "l2_scroll,l2_cols,l2_rows,l3_scroll,l3_cols,l3_rows\n");
+    std::fprintf(stderr, "ws_census=ENABLED path=\"%s\" interval=%u\n",
+        path, g_census_interval);
+}
+
+void census_frame(gba::GbaBus* bus) {
+    if (!g_census_file || !bus) return;
+
+    const unsigned long long frame = g_runtime_vblank_starts;
+    if (frame == g_census_frame_logged) return;
+    g_census_frame_logged = frame;
+
+    const unsigned mode =
+        static_cast<unsigned>(bus->io().read16(0x000u) & 7u);
+    const bool field = census_field_scene(bus);
+    // At native width the wide-path bookkeeping (which advances
+    // g_resolve_frame once per composed frame) never runs; advance it here so
+    // resolve_field_objects() still allows one fresh EWRAM scan per frame.
+    if (field && !g_ws_active)
+        g_resolve_frame = static_cast<std::uint32_t>(frame);
+    const bool single = field && is_single_chunk_bg3_scene(bus);
+
+    unsigned layers_mask = 0u;
+    int min_left = -1;
+    int min_right = -1;
+    int l_scroll[4] = {-1, -1, -1, -1};
+    int l_cols[4] = {0, 0, 0, 0};
+    int l_rows[4] = {0, 0, 0, 0};
+    if (field) {
+        for (int layer = 0; layer < 4; ++layer) {
+            const std::uint32_t object = g_field_objects[layer];
+            if (!object) continue;
+            const std::uint32_t resource = ewram32(bus, object + 0x08u);
+            const int cols = mem8(bus, resource + 0x14u);
+            const int rows = mem8(bus, resource + 0x15u);
+            const int scale_x = static_cast<int>(
+                static_cast<std::int32_t>(ewram32(bus, object + 0x3Cu)));
+            if (cols <= 0 || rows <= 0 || scale_x <= 0) continue;
+            layers_mask |= 1u << layer;
+            const int scroll_x = layer_scroll_x(bus, layer, object);
+            const int reach_left = scroll_x;
+            const int reach_right = cols * 256 - (scroll_x + 240);
+            const int left_px = static_cast<int>(
+                static_cast<long long>(reach_left) * 1024 / scale_x);
+            const int right_px = static_cast<int>(
+                static_cast<long long>(reach_right) * 1024 / scale_x);
+            l_scroll[layer] = scroll_x;
+            l_cols[layer] = cols;
+            l_rows[layer] = rows;
+            min_left = min_left < 0 ? left_px : std::min(min_left, left_px);
+            min_right = min_right < 0 ? right_px
+                                      : std::min(min_right, right_px);
+        }
+    }
+
+    unsigned signature = mode | (field ? 8u : 0u) |
+        (single ? 16u : 0u) | (layers_mask << 5);
+    for (int layer = 0; layer < 4; ++layer)
+        signature = signature * 31u +
+            static_cast<unsigned>(l_cols[layer] * 256 + l_rows[layer]);
+    if (frame < g_census_next_sample && signature == g_census_signature)
+        return;
+    g_census_next_sample = frame + g_census_interval;
+    g_census_signature = signature;
+
+    const int cam_x = static_cast<std::int32_t>(mem32(bus, kCameraX));
+    const int cam_left = static_cast<std::int32_t>(mem32(bus, kCameraLeft));
+    const int cam_right = static_cast<std::int32_t>(mem32(bus, kCameraRight));
+    std::fprintf(g_census_file,
+        "%llu,%u,%d,%d,%u,%d,%d,%d,%d,%d,"
+        "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        frame, mode, field ? 1 : 0, single ? 1 : 0, layers_mask,
+        cam_x, cam_left, cam_right, min_left, min_right,
+        l_scroll[0], l_cols[0], l_rows[0], l_scroll[1], l_cols[1], l_rows[1],
+        l_scroll[2], l_cols[2], l_rows[2], l_scroll[3], l_cols[3], l_rows[3]);
+    std::fflush(g_census_file);
+}
+
 // NOTE: this provider used to slide the native 240px viewport sideways inside
 // the widened host surface ("boundary framing") so the requested window stayed
 // inside the authored field. It depended on field_content_x_bounds(), whose
@@ -596,7 +816,17 @@ int layer_scroll_x(gba::GbaBus* bus, int bg, std::uint32_t object) {
 extern "C" int buus_fury_bg_x_provider(
     int bg, int output_x, int screen_y, int* out_hardware_x) {
     gba::GbaBus* bus = active_bus();
-    if (!out_hardware_x || bg < 0 || bg > 3 || !is_overworld(bus))
+    if (!out_hardware_x || bg < 0 || bg > 3)
+        return 0;
+
+    // Development census: classify each composed frame before the field gate
+    // so non-field frames are counted too. The per-frame guard inside
+    // census_frame() collapses the per-layer (0,0) visits into one record;
+    // it is inert unless GBARECOMP_WS_CENSUS is set.
+    if (g_census_file && output_x == 0 && screen_y == 0)
+        census_frame(bus);
+
+    if (!is_overworld(bus))
         return 0;
 
     // Rendering visits BG3 first and begins at output (0,0). Refresh the
@@ -626,11 +856,82 @@ extern "C" int buus_fury_bg_x_provider(
     return 0;
 }
 
+// ── Full-screen menu margins ───────────────────────────────────────────
+// The pause-menu family (Status/Journal/Inventory/Skills) paints its whole
+// 240x160 screen as a single 256-color BG2 art layer over a one-pixel
+// horizontal stripe background (palette indices 1 and 48 alternating per
+// scanline). The stripes are x-independent, so the widescreen margins
+// continue seamlessly by donating the matching tile row from the art's
+// leftmost tile column (x=0..7), which never carries content on these
+// screens. The donor tile is decoded and validated to contain only the two
+// background indices before use; any other screen that merely matches the
+// register shape fails closed to the transparent pillarbox.
+bool menu_stripe_scene(gba::GbaBus* bus) {
+    if (!bus) return false;
+    const std::uint16_t dispcnt = bus->io().read16(0x000u);
+    if ((dispcnt & 7u) != 0u || (dispcnt & 0x0F00u) != 0x0400u)
+        return false;
+    const std::uint16_t cnt = bus->io().read16(0x00Cu);
+    if ((cnt & 0x0080u) == 0u || ((cnt >> 14) & 3u) != 0u)
+        return false;
+    return bus->io().read16(0x018u) == 0u &&
+        bus->io().read16(0x01Au) == 0u;
+}
+
+std::uint32_t g_menu_donor_frame = std::numeric_limits<std::uint32_t>::max();
+std::uint32_t g_menu_donor_rows = 0u;
+std::uint16_t g_menu_donor_entry[20] = {};
+
+bool menu_margin_entry(gba::GbaBus* bus, int screen_y, std::uint16_t* out) {
+    if (!bus || !out || screen_y < 0 || screen_y >= 160)
+        return false;
+    const unsigned row = static_cast<unsigned>(screen_y) >> 3;
+    if (g_menu_donor_frame != g_resolve_frame) {
+        g_menu_donor_frame = g_resolve_frame;
+        g_menu_donor_rows = 0u;
+    }
+    if ((g_menu_donor_rows & (1u << row)) == 0u) {
+        const std::uint16_t cnt = bus->io().read16(0x00Cu);
+        const std::uint32_t char_base = ((cnt >> 2) & 3u) * 0x4000u;
+        const std::uint32_t screen_base = ((cnt >> 8) & 0x1Fu) * 0x800u;
+        const std::uint32_t map_off = screen_base +
+            static_cast<std::uint32_t>(row * 32u) * 2u;
+        const std::uint8_t* vram = bus->vram_ptr();
+        if (map_off + 1u < 96u * 1024u) {
+            const std::uint16_t entry =
+                static_cast<std::uint16_t>(vram[map_off]) |
+                (static_cast<std::uint16_t>(vram[map_off + 1u]) << 8);
+            const std::uint32_t tile =
+                char_base + (entry & 0x3FFu) * 64u;
+            bool pure = tile + 63u < 96u * 1024u;
+            for (std::uint32_t i = 0; pure && i < 64u; ++i) {
+                const std::uint8_t idx = vram[tile + i];
+                if (idx != 1u && idx != 48u) pure = false;
+            }
+            if (pure) {
+                g_menu_donor_entry[row] = entry;
+                g_menu_donor_rows |= 1u << row;
+            }
+        }
+    }
+    if ((g_menu_donor_rows & (1u << row)) == 0u)
+        return false;
+    *out = g_menu_donor_entry[row];
+    return true;
+}
+
 extern "C" int buus_fury_tilemap_provider(
     int bg, int hardware_x, int screen_y, std::uint16_t* out_entry) {
     gba::GbaBus* bus = active_bus();
-    if (!out_entry || bg < 0 || bg > 3 || !is_overworld(bus))
+    if (!out_entry || bg < 0 || bg > 3)
         return gba::kWsTilemapUnavailable;
+
+    if (!is_overworld(bus)) {
+        if (bg == 2 && menu_stripe_scene(bus) &&
+            menu_margin_entry(bus, screen_y, out_entry))
+            return gba::kWsTilemapReplace;
+        return gba::kWsTilemapUnavailable;
+    }
 
     if (g_single_chunk_bg3_scene)
         return gba::kWsTilemapUnavailable;
@@ -654,14 +955,28 @@ extern "C" int buus_fury_obj_x_provider(
     // slots are the top-left portrait/health/energy group. World actors begin
     // at slot 3 and must stay camera-relative.
     //
-    // The compositor adds the left margin to every resolved sprite position
-    // (gba_ppu.cpp emits sx + ox), so this hook must hand back the plain
-    // native X. Subtracting g_ws_extra_left here displaced this group by a
-    // full margin: on a dialogue panel the first two pieces landed at output
-    // 8/72 while pieces 2..6 landed correctly at native_x + margin, tearing
-    // the panel in half. Returning the native X keeps the group inside the
-    // centred native viewport and aligned with the BG layers.
+    // Dialogue panel art reuses these low slots too (a top panel occupied
+    // slots 0..2 at y=8 in the dr capture), so slot/index alone cannot
+    // classify the group. The tile bank can: the status group always draws
+    // from the static upper OBJ bank (tiles 0x370/0x380/0x388, priority 1),
+    // while panel art draws from the per-panel bank at 0x180-0x320 and world
+    // actors from the dynamic 0xF00+ bank at priority 3. This is why the old
+    // slot-only test tore top panels in half when the group was displaced by
+    // a margin: it claimed panel pieces as status pieces.
+    //
+    // Edge anchoring: in expanded views the status group leaves the centred
+    // native viewport and pins to the physical left edge. The compositor
+    // re-adds the left margin to every resolved sprite X, so subtracting the
+    // margin here lands the group at output x = native x (the true screen
+    // edge). At native width g_ws_extra_left is 0 and every coordinate stays
+    // byte-for-byte native.
     if (oam_index >= 0 && oam_index <= 2 && x < 96 && y < 32) {
+        const unsigned tile = attr2 & 0x3FFu;
+        const unsigned priority = (attr2 >> 10) & 3u;
+        if (tile >= 0x360u && tile < 0x400u && priority == 1u) {
+            *out_x = x - static_cast<int>(g_ws_extra_left);
+            return 1;
+        }
         *out_x = x;
         return 1;
     }
@@ -748,10 +1063,250 @@ extern "C" int buus_fury_obj_x_provider(
     return 1;
 }
 
+// Movement turbo bookkeeping, refreshed at the game's single keypad poll
+// (once per frame). Turbo is armed only while L is held during walkable field
+// gameplay, and resolves the controlled hero through the game's own global so
+// no object is ever scaled by guesswork. L is the free field key: holding
+// Select, R, B or Start suppresses native walking (each has its own game
+// function), while L+Right walks exactly like Right and L alone is
+// pixel-transparent (all verified with TCP keypad + frame compares).
+void update_turbo(gba::GbaBus* bus, bool walkable_field, bool l_held) {
+    g_turbo_active = false;
+    if (!bus || !walkable_field || !l_held) {
+        g_turbo_player = 0u;
+        return;
+    }
+    const std::uint32_t player = mem32(bus, kControlledActor);
+    if (player < 0x02000000u ||
+        player + kActorFixedY + 4u > 0x02040000u) {
+        g_turbo_player = 0u;
+        return;
+    }
+    const std::uint32_t vtable = mem32(bus, player);
+    if (vtable < 0x08000000u || vtable >= 0x0A000000u) {
+        g_turbo_player = 0u;
+        return;
+    }
+    g_turbo_player = player;
+    g_turbo_active = true;
+}
+
+// ── Sound test / music player ──────────────────────────────────────────
+// The game's music engine resolves a song request through the service at
+// 0x080008A8 and arms the master streaming state at 0x030038A4 (the record
+// pointer it is playing lives at +0xC = 0x030038B0). The record table is at
+// 0x083BB78C: 53 records of 20 bytes, {stream_a, stream_b, bank, bank,
+// length}. 0x0803F110(state, record, old_record, index*4) is the engine's own
+// "start this record now" call, captured live at the title->field music
+// switch (the service passes the previous record for the crossfade). The mod
+// replays that exact call with the generated-call ABI: push a return frame,
+// set the AAPCS argument registers, dispatch natively, restore the
+// caller-visible register file. Nothing here runs unless the player presses
+// the chord, so regression frames stay byte-identical.
+constexpr std::uint32_t kMusicState = 0x030038A4u;
+constexpr std::uint32_t kMusicRecordPtr = 0x030038B0u;
+constexpr std::uint32_t kSongTable = 0x083BB78Cu;
+constexpr std::uint32_t kSongCount = 53u;
+constexpr std::uint32_t kSongRecordBytes = 20u;
+constexpr std::uint32_t kStartSongFn = 0x0803F110u;
+// Return address that is never executed: runtime_call_should_return() pops
+// the frame and the generated tail dispatch returns to the host caller
+// instead of dispatching it.
+constexpr std::uint32_t kSongReturnSentinel = 0x03007FF0u;
+int g_song_cycle_request = 0;
+std::uint32_t g_song_prev_keys = 0x3FFu;
+int g_song_last_index = -1;
+
+void call_start_song(std::uint32_t state, std::uint32_t record,
+                     std::uint32_t old_record, std::uint32_t index4) {
+    std::uint32_t saved_regs[16];
+    for (int i = 0; i < 16; ++i) saved_regs[i] = g_cpu.R[i];
+    const std::uint32_t saved_cpsr = g_cpu.cpsr;
+
+    const std::uint32_t depth_before = runtime_call_stack_depth();
+    runtime_call_push_return(kSongReturnSentinel | 1u);
+    g_cpu.R[0] = state;
+    g_cpu.R[1] = record;
+    g_cpu.R[2] = old_record;
+    g_cpu.R[3] = index4;
+    g_cpu.R[14] = kSongReturnSentinel | 1u;
+    runtime_dispatch_with_exchange(kStartSongFn | 1u);
+    if (runtime_call_stack_depth() > depth_before)
+        runtime_call_cancel_return(kSongReturnSentinel | 1u);
+
+    for (int i = 0; i < 16; ++i) g_cpu.R[i] = saved_regs[i];
+    g_cpu.cpsr = saved_cpsr;
+}
+
+// Chord detection at the game's single keypad poll (once per frame): L+R
+// held plus a fresh Left/Right press cycles the current record. Walkable
+// field gameplay is excluded (L is movement turbo and R blocks there);
+// menus, dialogues and cutscenes all work.
+void update_sound_test_keys(std::uint32_t keys, bool walkable_field) {
+    const bool chord =
+        !walkable_field && (keys & 0x200u) == 0u && (keys & 0x100u) == 0u;
+    if (chord) {
+        if ((keys & 0x20u) == 0u && (g_song_prev_keys & 0x20u) != 0u)
+            g_song_cycle_request = -1;
+        else if ((keys & 0x10u) == 0u && (g_song_prev_keys & 0x10u) != 0u)
+            g_song_cycle_request = 1;
+    }
+    g_song_prev_keys = keys;
+}
+
+// Serviced from the keypad-poll read override the moment a cycle request is
+// set: that context has the game's own return frames open, which is exactly
+// what the generated call/return ABI needs.
+void sound_test_service(gba::GbaBus* bus) {
+    if (!bus || g_song_cycle_request == 0)
+        return;
+    const int request = g_song_cycle_request;
+    g_song_cycle_request = 0;
+
+    const std::uint32_t current = mem32(bus, kMusicRecordPtr);
+    int index = -1;
+    if (current >= kSongTable &&
+        current < kSongTable + kSongCount * kSongRecordBytes &&
+        ((current - kSongTable) % kSongRecordBytes) == 0u) {
+        index = static_cast<int>((current - kSongTable) / kSongRecordBytes);
+    } else if (g_song_last_index >= 0) {
+        index = g_song_last_index;
+    } else {
+        index = 0;
+    }
+    int next = index + request;
+    if (next < 0) next = static_cast<int>(kSongCount) - 1;
+    if (next >= static_cast<int>(kSongCount)) next = 0;
+    g_song_last_index = next;
+    call_start_song(
+        kMusicState,
+        kSongTable + static_cast<std::uint32_t>(next) * kSongRecordBytes,
+        current, static_cast<std::uint32_t>(next) * 4u);
+}
+
+// ── Optional West City waypoint (opt-in DataCrystal data port) ─────────
+// West City's waypoint list is a ROM table: a u32 count at 0x0826A7B8, a
+// u32 pointer to an array of u32 template pointers at 0x0826A7BC, and 24-
+// byte waypoint templates (two constructor pointers + four packed
+// attribute words). The stock table lists two waypoints (Capsule Corp and
+// Z-Mart). The DataCrystal "Add a waypoint" hack bumps the count to 3 and
+// points the array at free ROM space (0x087E6A00), where it re-lists the
+// two stock templates plus a new one built from the game's own constructor
+// pair (0x08007674/0x0800776C) with West City coordinates. Ported without
+// touching the ROM: when enabled, the read override serves the hacked
+// values to any guest read of the three regions. Off unless
+// GBARECOMP_BF_WAYPOINTS=1; the guest never reads those addresses in
+// states without West City's map, so enabling it cannot affect them.
+constexpr std::uint32_t kWaypointCountAddr = 0x0826A7B8u;
+constexpr std::uint32_t kWaypointArrayAddr = 0x0826A7BCu;
+constexpr std::uint32_t kWaypointPatchAddr = 0x087E6A00u;
+constexpr std::size_t kWaypointPatchBytes = 36u;
+constexpr std::uint8_t kWaypointPatch[kWaypointPatchBytes] = {
+    0x40, 0xA7, 0x26, 0x08,  // 0x0826A740: Capsule Corp template
+    0x58, 0xA7, 0x26, 0x08,  // 0x0826A758: Z-Mart template
+    0x0C, 0x6A, 0x7E, 0x08,  // 0x087E6A0C: the new template below
+    0x75, 0x76, 0x00, 0x08,  // 0x08007675: game's waypoint constructor
+    0x6D, 0x77, 0x00, 0x08,  // 0x0800776D: game's waypoint constructor
+    0x08, 0x01, 0x40, 0x00,  // 0x00400108
+    0x11, 0x01, 0x50, 0x00,  // 0x00500111
+    0x01, 0x02, 0x02, 0x00,  // 0x00020201
+    0xD8, 0x00, 0xAC, 0x01,  // 0x01AC00D8
+};
+bool g_waypoint_feature = false;
+
+bool waypoint_patch_read(
+    std::uint32_t address, std::uint32_t width, std::uint32_t* out_value) {
+    if (!out_value || (width != 1u && width != 2u && width != 4u))
+        return false;
+    if (address == kWaypointCountAddr && width == 4u) {
+        *out_value = 3u;
+        return true;
+    }
+    if (address == kWaypointArrayAddr && width == 4u) {
+        *out_value = kWaypointPatchAddr;
+        return true;
+    }
+    if (address >= kWaypointPatchAddr &&
+        address + width <= kWaypointPatchAddr + kWaypointPatchBytes) {
+        std::uint32_t value = 0u;
+        const std::size_t offset = address - kWaypointPatchAddr;
+        for (std::uint32_t i = 0u; i < width; ++i)
+            value |= static_cast<std::uint32_t>(
+                kWaypointPatch[offset + i]) << (8u * i);
+        *out_value = value;
+        return true;
+    }
+    return false;
+}
+
+extern "C" int buus_fury_bus_write_override(
+    std::uint32_t pc, std::uint32_t address, std::uint32_t width,
+    std::uint32_t value, std::uint32_t* out_value) {
+    (void)pc;
+    if (!out_value || !g_turbo_active || width != 4u)
+        return 0;
+    const std::uint32_t player = g_turbo_player;
+    if (address != player + kActorFixedX && address != player + kActorFixedY)
+        return 0;
+    gba::GbaBus* bus = active_bus();
+    if (!bus)
+        return 0;
+    const std::int32_t before = static_cast<std::int32_t>(mem32(bus, address));
+    const std::int32_t delta = static_cast<std::int32_t>(value) - before;
+    const std::int32_t magnitude = delta < 0 ? -delta : delta;
+    // Scale only an ordinary per-frame walking step. Idle re-writes (delta 0)
+    // and teleports/respawns/area loads (large jumps) stay exactly native.
+    if (magnitude == 0 || magnitude > kWalkStepLimit)
+        return 0;
+    *out_value = static_cast<std::uint32_t>(before + delta + delta / 2);
+    return 1;
+}
+
 extern "C" int buus_fury_bus_read_override(
     std::uint32_t pc, std::uint32_t address, std::uint32_t width,
     std::uint32_t original, std::uint32_t* out_value) {
     gba::GbaBus* bus = active_bus();
+    if (g_waypoint_feature && out_value &&
+        waypoint_patch_read(address, width, out_value))
+        return 1;
+    // Census trigger: the first guest bus read of a frame classifies it.
+    // This fires at native width too (the margin providers never run there),
+    // which is what lets a full-game census replay at full speed.
+    if (g_census_file) census_frame(bus);
+    // Player comfort: holding Select auto-taps the button the current screen
+    // expects. Cinematic single-chunk screens advance with B (the intro battle
+    // and story cutscenes scroll when B is tapped and ignore A, verified with
+    // replays); other non-field screens advance with A (menus, prompts).
+    // Walkable field gameplay is excluded entirely: the game itself consumes
+    // Select there (holding it suppresses walking), so the auto-tap stays out
+    // of the field and can never fire attacks while walking. The tap is a
+    // two-frame window every twenty frames: the game advances on fresh press
+    // edges, and a continuously held button only registers once. KEYINPUT is
+    // active-low (bit 0 = A, bit 1 = B, bit 2 = Select) and 0x0803D4A6 is the
+    // game's single keypad poll site reading 0x04000130.
+    if (out_value && bus && address == 0x04000130u && width == 2u) {
+        const bool walkable_field =
+            is_overworld(bus) && !g_single_chunk_bg3_scene;
+        // Once-per-frame bookkeeping: refresh the movement-turbo target. In
+        // walkable field gameplay a held L boosts the hero's walking step
+        // 1.5x through the write override; menus and cutscenes keep the
+        // auto-advance behavior below untouched (that one keys on Select).
+        update_turbo(bus, walkable_field, (original & 0x200u) == 0u);
+        update_sound_test_keys(original, walkable_field);
+        // Service the music-cycle request right here: the keypad poll runs
+        // with the game's own return frames open, which is the clean context
+        // for a guest call (the generated call/return ABI needs the pushed
+        // frame to be consumed by the callee's pop{pc}).
+        if (g_song_cycle_request != 0)
+            sound_test_service(bus);
+        if ((original & 0x004u) == 0u && !walkable_field &&
+            (g_runtime_vblank_starts % 20ull) < 2ull) {
+            const std::uint32_t button =
+                g_single_chunk_bg3_scene ? 0x0002u : 0x0001u;
+            *out_value = original & ~button;
+            return 1;
+        }
+    }
     if (!out_value || width != 4u || !is_overworld(bus))
         return 0;
     if (g_single_chunk_bg3_scene)
@@ -800,6 +1355,7 @@ extern "C" int buus_fury_bus_read_override(
 }  // namespace
 
 void install_extended_view(std::uint32_t, std::uint32_t) {
+    census_configure();
     for (std::uint32_t& object : g_field_objects)
         object = 0u;
     g_decoded_chunks.clear();
@@ -817,10 +1373,52 @@ void install_extended_view(std::uint32_t, std::uint32_t) {
         (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3);
     gba::g_ws_obj_attr_x_provider = &buus_fury_obj_x_provider;
     g_runtime_bus_read_override = &buus_fury_bus_read_override;
+    g_runtime_bus_write_override = &buus_fury_bus_write_override;
+    g_turbo_active = false;
+    g_turbo_player = 0u;
+    g_song_cycle_request = 0;
+    g_song_prev_keys = 0x3FFu;
+    g_song_last_index = -1;
+    g_menu_donor_frame = std::numeric_limits<std::uint32_t>::max();
+    g_menu_donor_rows = 0u;
+    const char* waypoints = std::getenv("GBARECOMP_BF_WAYPOINTS");
+    g_waypoint_feature = waypoints && waypoints[0] && waypoints[0] != '0';
+    if (std::getenv("GBARECOMP_BF_WAYPOINTS_SELFTEST")) {
+        std::uint32_t value = 0u;
+        const bool count_ok =
+            waypoint_patch_read(kWaypointCountAddr, 4u, &value);
+        std::fprintf(stderr,
+            "[buus-fury:waypoint] selftest count ok=%d value=%u\n",
+            count_ok ? 1 : 0, value);
+        const bool array_ok =
+            waypoint_patch_read(kWaypointArrayAddr, 4u, &value);
+        std::fprintf(stderr,
+            "[buus-fury:waypoint] selftest array ok=%d value=0x%08X\n",
+            array_ok ? 1 : 0, value);
+        for (std::uint32_t off = 0u; off < kWaypointPatchBytes; off += 4u) {
+            const bool word_ok = waypoint_patch_read(
+                kWaypointPatchAddr + off, 4u, &value);
+            std::fprintf(stderr,
+                "[buus-fury:waypoint] selftest patch+%u ok=%d value=0x%08X\n",
+                off, word_ok ? 1 : 0, value);
+        }
+        const bool byte_ok = waypoint_patch_read(
+            kWaypointPatchAddr + 12u, 2u, &value);
+        std::fprintf(stderr,
+            "[buus-fury:waypoint] selftest u16@+12 ok=%d value=0x%04X\n",
+            byte_ok ? 1 : 0, value);
+        const bool miss_ok = !waypoint_patch_read(
+            kWaypointPatchAddr + kWaypointPatchBytes, 4u, &value);
+        std::fprintf(stderr,
+            "[buus-fury:waypoint] selftest miss rejected=%d\n",
+            miss_ok ? 1 : 0);
+    }
     std::fprintf(stderr,
         "[buus-fury:view] authored BG0..BG3 field continuation + centred native "
         "viewport + exact chunk decode + edge HUD + expanded actor "
-        "visibility enabled\n");
+        "visibility + Select auto-advance + L-held movement turbo + "
+        "L+R+arrows music player + full-screen menu margins enabled%s\n",
+        g_waypoint_feature ? " + West City waypoint" : "");
 }
 
 }  // namespace buus_fury
