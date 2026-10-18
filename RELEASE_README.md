@@ -1,4 +1,4 @@
-# Dragon Ball Z: Buu's Fury Recomp — v0.0.6 WIP (Release ejecutable)
+# Dragon Ball Z: Buu's Fury Recomp — v0.0.7 (Release ejecutable)
 
 Copyright (c) 2026 **NovaPowers**. Fork de
 [`mstan/DragonBallZBuusFuryRecomp`](https://github.com/mstan/DragonBallZBuusFuryRecomp),
@@ -33,7 +33,7 @@ archivos de tu copia legal.
    **EN/ES**; pulsa **Play**.
 4. En **Mods** puedes activar el **Adaptive Widescreen** (v1.0.4).
 
-## Novedades de este release (v0.0.6 WIP)
+## Novedades de este release (v0.0.7)
 
 - **Arranque fiel al BIOS real**: el arranque rápido ahora deja `DISPCNT` en
   *forced blank* y `POSTFLG` activado igual que el BIOS real (y mGBA), y el PPU
