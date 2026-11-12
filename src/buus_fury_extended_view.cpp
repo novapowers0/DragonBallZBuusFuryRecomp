@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
+#include <iterator>
 #include <limits>
 #include <list>
 #include <unordered_map>
@@ -14,6 +15,7 @@
 #include "gba_ppu.h"
 #include "runtime_arm.h"
 #include "runtime_bus_bridge.h"
+#include "title_margin_art.h"
 
 extern "C" unsigned g_ws_active;
 extern "C" unsigned g_ws_extra_left;
@@ -508,8 +510,11 @@ bool is_single_chunk_bg3_scene(gba::GbaBus* bus) {
         mem8(bus, resource + 0x15u) == 1u;
 }
 
-bool is_overworld(gba::GbaBus* bus) {
-    if (!bus || !g_ws_active) return false;
+// Field-gameplay register shape (mode 0, BG0..BG3 + OBJ on, BGn on screen
+// block 28+n, 256x256 maps). Width-independent: the gameplay QoL hooks and the
+// census use it at native width too.
+bool field_scene_shape(gba::GbaBus* bus) {
+    if (!bus) return false;
     const std::uint16_t dispcnt = bus->io().read16(0x000u);
     if ((dispcnt & 7u) != 0u || (dispcnt & 0x1F40u) != 0x1F40u)
         return false;
@@ -523,6 +528,25 @@ bool is_overworld(gba::GbaBus* bus) {
         }
     }
     return true;
+}
+
+// A field scene that the widened renderer is extending.
+bool is_overworld(gba::GbaBus* bus) {
+    return g_ws_active && field_scene_shape(bus);
+}
+
+// Walkable field gameplay (not a single-chunk dialogue/cutscene screen), at
+// any view width. Called once per frame from the keypad poll. In an expanded
+// view bg_x_provider already refreshed the per-frame state; at native width
+// that provider never runs, so advance the resolve frame here (one EWRAM scan
+// per frame at most, exactly like the census does).
+bool walkable_field_now(gba::GbaBus* bus) {
+    if (g_ws_active)
+        return is_overworld(bus) && !g_single_chunk_bg3_scene;
+    if (!field_scene_shape(bus))
+        return false;
+    g_resolve_frame = static_cast<std::uint32_t>(g_runtime_vblank_starts);
+    return !is_single_chunk_bg3_scene(bus);
 }
 
 bool field_entry_resolve(
@@ -626,6 +650,11 @@ bool field_entry(
     slot.tile_y = tile_y;
     slot.entry = entry;
     slot.valid = ok;
+    // The miss path must hand the freshly resolved entry back too; leaving
+    // out_entry unwritten made the first sampled pixel of every margin tile
+    // draw an uninitialized tile (the black/stray dot grid in the margins).
+    if (ok)
+        *out_entry = entry;
     return ok;
 }
 
@@ -686,25 +715,6 @@ unsigned long long g_census_frame_logged = ~0ull;
 unsigned long long g_census_next_sample = 0;
 unsigned g_census_signature = ~0u;
 
-// Repeats is_overworld()'s DISPCNT/BG-slot test without its expanded-view
-// gate: a native-width census replay never expands the view, but the field
-// frames (and their authored extents) are exactly what it must classify.
-bool census_field_scene(gba::GbaBus* bus) {
-    if (!bus) return false;
-    const std::uint16_t dispcnt = bus->io().read16(0x000u);
-    if ((dispcnt & 7u) != 0u || (dispcnt & 0x1F40u) != 0x1F40u)
-        return false;
-    for (int bg = 0; bg < 4; ++bg) {
-        const std::uint16_t cnt =
-            bus->io().read16(0x008u + static_cast<std::uint32_t>(bg * 2));
-        if (((cnt >> 8) & 0x1Fu) != static_cast<unsigned>(28 + bg) ||
-            ((cnt >> 14) & 3u) != 0u) {
-            return false;
-        }
-    }
-    return true;
-}
-
 void census_configure() {
     const char* path = std::getenv("GBARECOMP_WS_CENSUS");
     if (!path || !path[0]) return;
@@ -735,7 +745,7 @@ void census_frame(gba::GbaBus* bus) {
 
     const unsigned mode =
         static_cast<unsigned>(bus->io().read16(0x000u) & 7u);
-    const bool field = census_field_scene(bus);
+    const bool field = field_scene_shape(bus);
     // At native width the wide-path bookkeeping (which advances
     // g_resolve_frame once per composed frame) never runs; advance it here so
     // resolve_field_objects() still allows one fresh EWRAM scan per frame.
@@ -973,7 +983,15 @@ extern "C" int buus_fury_obj_x_provider(
     if (oam_index >= 0 && oam_index <= 2 && x < 96 && y < 32) {
         const unsigned tile = attr2 & 0x3FFu;
         const unsigned priority = (attr2 >> 10) & 3u;
-        if (tile >= 0x360u && tile < 0x400u && priority == 1u) {
+        // The group's tile bank moves while the area-name banner is loaded
+        // (0x2B6/0x2C6/0x2CE on entering West City), so also accept its exact
+        // geometry: priority 1, row 8, slots at x 8/40/56. Panel art in
+        // these slots is priority 0, so it still never matches.
+        static constexpr int kStatusX[3] = {8, 40, 56};
+        const bool status_geometry =
+            priority == 1u && y == 8 && x == kStatusX[oam_index];
+        if ((tile >= 0x360u && tile < 0x400u && priority == 1u) ||
+            status_geometry) {
             *out_x = x - static_cast<int>(g_ws_extra_left);
             return 1;
         }
@@ -1192,11 +1210,17 @@ void sound_test_service(gba::GbaBus* bus) {
 // Z-Mart). The DataCrystal "Add a waypoint" hack bumps the count to 3 and
 // points the array at free ROM space (0x087E6A00), where it re-lists the
 // two stock templates plus a new one built from the game's own constructor
-// pair (0x08007674/0x0800776C) with West City coordinates. Ported without
-// touching the ROM: when enabled, the read override serves the hacked
-// values to any guest read of the three regions. Off unless
-// GBARECOMP_BF_WAYPOINTS=1; the guest never reads those addresses in
-// states without West City's map, so enabling it cannot affect them.
+// pair (0x08007674/0x0800776C) with West City coordinates. Verified in game
+// (session 9, GameFAQs save in West City): the new waypoint is a walk-in zone
+// at the north end of the alley beside the Capsule Corp tower (x 264-273,
+// y 64-80) that warps to Goku's House, like the stock Z-Mart door.
+// Ported without touching the ROM. Only the count and array pointer (what a
+// fresh West City load reads) follow GBARECOMP_BF_WAYPOINTS=1; the 36 bytes
+// at 0x087E6A00 are served ALWAYS. That region is 0xFF padding on every
+// accepted dump, so serving it is inert, and it keeps a savestate taken
+// with the waypoint loaded valid in a session without it (otherwise the
+// stored template pointer reads padding and the game asserts "UNABLE TO
+// FIND AREA" in areaentry.cpp when the zone is touched).
 constexpr std::uint32_t kWaypointCountAddr = 0x0826A7B8u;
 constexpr std::uint32_t kWaypointArrayAddr = 0x0826A7BCu;
 constexpr std::uint32_t kWaypointPatchAddr = 0x087E6A00u;
@@ -1215,8 +1239,12 @@ constexpr std::uint8_t kWaypointPatch[kWaypointPatchBytes] = {
 bool g_waypoint_feature = false;
 
 bool waypoint_patch_read(
-    std::uint32_t address, std::uint32_t width, std::uint32_t* out_value) {
+    std::uint32_t address, std::uint32_t width, std::uint32_t* out_value,
+    bool listed = true) {
     if (!out_value || (width != 1u && width != 2u && width != 4u))
+        return false;
+    if (!listed && (address == kWaypointCountAddr ||
+                    address == kWaypointArrayAddr))
         return false;
     if (address == kWaypointCountAddr && width == 4u) {
         *out_value = 3u;
@@ -1239,10 +1267,71 @@ bool waypoint_patch_read(
     return false;
 }
 
+// ── Failed-fusion guard (bug fix, on by default) ───────────────────────
+// Original-game bug (documented by Glitch City Laboratories): fail the
+// fusion dance on a world-map circle and press A, and the game tries to fly
+// the failed-fusion form, whose world-map sprite set does not exist; it
+// jumps through a garbage pointer (pc 0x018909F0 here) - a black screen with
+// stuck music on hardware, an interpreter abort in this port. Saving on a
+// save circle as that form garbles the file-select screen the same way.
+// A failed fusion cannot walk, attack or talk usefully and wears off on its
+// own, so the guard simply hides A from the game while one is active.
+// Verified state (TCP, GameFAQs West City saves): 0x03001068 is the
+// controlled character slot (Goten 2 -> 5 while fused, Goku 0 -> 7; the
+// fusions are slots 5 Gotenks and 7 Gogeta). Each 0x68-byte character block
+// (0x03001560 + slot * 0x68) records the fusion's duration in frames at
+// +0x08 (0x03001770 Gotenks, 0x03001840 Gogeta): 17960 (the 4:59 timer) for a good dance, 1800 (30 s) for a failed
+// one, whatever failed form came out (sprite set +0x14 was seen as 0x20 and
+// 0x21 for Gotenks, 0x2B for Gogeta, so the form id is not a reliable
+// test). Both fields keep their value after the fusion ends, so the
+// controlled slot gates the guard. GBARECOMP_BF_FUSION_GUARD=0 restores the
+// original behaviour.
+constexpr std::uint32_t kControlledSlot = 0x03001068u;
+constexpr std::uint32_t kCharacterBlocks = 0x03001560u;
+constexpr std::uint32_t kCharacterStride = 0x68u;
+constexpr std::uint32_t kFusionDurationOffset = 0x08u;
+constexpr std::uint32_t kFailedFusionFrames = 1800u;
+bool g_fusion_guard = true;
+
+bool failed_fusion_active(gba::GbaBus* bus) {
+    const std::uint32_t slot = mem8(bus, kControlledSlot);
+    if (slot != 5u && slot != 7u)
+        return false;
+    const std::uint32_t field =
+        kCharacterBlocks + slot * kCharacterStride + kFusionDurationOffset;
+    const std::uint32_t frames =
+        mem8(bus, field) | (static_cast<std::uint32_t>(mem8(bus, field + 1u)) << 8);
+    return frames == kFailedFusionFrames;
+}
+
+// ── Item-count underflow guard (bug fix, on by default) ────────────────
+// The "255 Senzu Beans" exploit (Glitch City Laboratories): Gohan takes a
+// Senzu you already ate and the count wraps from 0 to 255. Root cause: the
+// script VM's item opcodes (table 0x08055098) are op 129 "add n" at
+// 0x08000B80, which clamps at 255, and the two subtracting ones with no
+// floor - op 130 "minus one" at 0x08000BB2 (ldrb; adds #0xFF; strb) and op
+// 131 "minus n" at 0x08000BCC (ldrb; subs; strb). Reproduced in game: with
+// the Senzu entry selected in Inventario and its count forced to 0 in the
+// state, "Usar" left 255 (then 254). A subtracting opcode can never
+// legitimately raise a count, so a store that would raise it is clamped to
+// 0 - the floor the game already gives the add. GBARECOMP_BF_ITEM_GUARD=0
+// restores the original behaviour.
+constexpr std::uint32_t kItemSubOpsBegin = 0x08000BB2u;
+constexpr std::uint32_t kItemSubOpsEnd = 0x08000BF0u;
+bool g_item_guard = true;
+
 extern "C" int buus_fury_bus_write_override(
     std::uint32_t pc, std::uint32_t address, std::uint32_t width,
     std::uint32_t value, std::uint32_t* out_value) {
-    (void)pc;
+    if (g_item_guard && out_value && width == 1u &&
+        pc >= kItemSubOpsBegin && pc < kItemSubOpsEnd) {
+        gba::GbaBus* bus = active_bus();
+        if (bus && (value & 0xFFu) > mem8(bus, address)) {
+            *out_value = 0u;
+            return 1;
+        }
+        return 0;
+    }
     if (!out_value || !g_turbo_active || width != 4u)
         return 0;
     const std::uint32_t player = g_turbo_player;
@@ -1266,8 +1355,8 @@ extern "C" int buus_fury_bus_read_override(
     std::uint32_t pc, std::uint32_t address, std::uint32_t width,
     std::uint32_t original, std::uint32_t* out_value) {
     gba::GbaBus* bus = active_bus();
-    if (g_waypoint_feature && out_value &&
-        waypoint_patch_read(address, width, out_value))
+    if (out_value &&
+        waypoint_patch_read(address, width, out_value, g_waypoint_feature))
         return 1;
     // Census trigger: the first guest bus read of a frame classifies it.
     // This fires at native width too (the margin providers never run there),
@@ -1285,8 +1374,11 @@ extern "C" int buus_fury_bus_read_override(
     // active-low (bit 0 = A, bit 1 = B, bit 2 = Select) and 0x0803D4A6 is the
     // game's single keypad poll site reading 0x04000130.
     if (out_value && bus && address == 0x04000130u && width == 2u) {
-        const bool walkable_field =
-            is_overworld(bus) && !g_single_chunk_bg3_scene;
+        // KEYINPUT is active-low: setting bit 0 releases A.
+        const std::uint32_t keys =
+            (g_fusion_guard && (original & 0x001u) == 0u &&
+             failed_fusion_active(bus)) ? (original | 0x001u) : original;
+        const bool walkable_field = walkable_field_now(bus);
         // Once-per-frame bookkeeping: refresh the movement-turbo target. In
         // walkable field gameplay a held L boosts the hero's walking step
         // 1.5x through the write override; menus and cutscenes keep the
@@ -1303,7 +1395,11 @@ extern "C" int buus_fury_bus_read_override(
             (g_runtime_vblank_starts % 20ull) < 2ull) {
             const std::uint32_t button =
                 g_single_chunk_bg3_scene ? 0x0002u : 0x0001u;
-            *out_value = original & ~button;
+            *out_value = keys & ~button;
+            return 1;
+        }
+        if (keys != original) {
+            *out_value = keys;
             return 1;
         }
     }
@@ -1352,7 +1448,294 @@ extern "C" int buus_fury_bus_read_override(
     return 0;
 }
 
+// ── Non-field screen margins ───────────────────────────────────────────
+// Flat-edge continuation (authentic, on with the widescreen view). Logo and
+// other still screens often paint a flat background up to the native edge.
+// When, on every row, the outermost 8 pixels of every enabled BG are one
+// palette index (or all transparent), that row's background is horizontally
+// flat there, so the margin repeats the edge column through the BG renderer
+// itself: blending, fades and palette changes follow exactly. Anything with
+// detail at the edge fails the check and keeps the black pillarbox.
+constexpr int kFlatEdgeStrip = 8;
+bool g_flat_edge_left = false;
+bool g_flat_edge_right = false;
+
+// Palette index of one regular (mode 0) BG at native pixel (hx, y); 0 is
+// transparent. 16-color layers fold the palette bank in so equal indices in
+// different banks never compare equal.
+int bg_index_at(gba::GbaBus* bus, int layer, int hx, int y) {
+    const std::uint16_t cnt =
+        bus->io().read16(0x008u + static_cast<std::uint32_t>(layer * 2));
+    const std::uint32_t char_base = ((cnt >> 2) & 3u) * 0x4000u;
+    const std::uint32_t screen_base = ((cnt >> 8) & 0x1Fu) * 0x800u;
+    const bool color256 = (cnt & 0x80u) != 0u;
+    const unsigned size = (cnt >> 14) & 3u;
+    const unsigned width_px = (size & 1u) ? 512u : 256u;
+    const unsigned height_px = (size & 2u) ? 512u : 256u;
+    const std::uint32_t scroll_io = 0x010u + static_cast<std::uint32_t>(layer * 4);
+    const unsigned hofs = bus->io().read16(scroll_io) & 0x1FFu;
+    const unsigned vofs = bus->io().read16(scroll_io + 2u) & 0x1FFu;
+    const unsigned tx = (static_cast<unsigned>(hx) + hofs) & (width_px - 1u);
+    const unsigned ty = (static_cast<unsigned>(y) + vofs) & (height_px - 1u);
+    const unsigned tile_x = tx >> 3, tile_y = ty >> 3;
+    const unsigned block = (tile_x >> 5) + (tile_y >> 5) * (width_px / 256u);
+    const std::uint32_t map_off = screen_base + block * 0x800u +
+        ((tile_y & 31u) * 32u + (tile_x & 31u)) * 2u;
+    const std::uint8_t* vram = bus->vram_ptr();
+    if (map_off + 1u >= 96u * 1024u) return -1;
+    const std::uint16_t entry = static_cast<std::uint16_t>(
+        vram[map_off] | (vram[map_off + 1u] << 8));
+    unsigned px = tx & 7u, py = ty & 7u;
+    if (entry & 0x400u) px = 7u - px;
+    if (entry & 0x800u) py = 7u - py;
+    const unsigned tile = entry & 0x3FFu;
+    if (color256) {
+        const std::uint32_t a = char_base + tile * 64u + py * 8u + px;
+        return a < 96u * 1024u ? vram[a] : -1;
+    }
+    const std::uint32_t a = char_base + tile * 32u + py * 4u + (px >> 1);
+    if (a >= 96u * 1024u) return -1;
+    const unsigned idx = (px & 1u) ? (vram[a] >> 4) : (vram[a] & 0xFu);
+    return idx == 0u ? 0 : static_cast<int>(((entry >> 12) << 4) | idx);
+}
+
+// A logo may just graze the strip (the Webfoot footprint touches it on one
+// row), so a few detailed rows are tolerated; those rows still repeat the
+// outermost column, which is the flat background on such screens.
+constexpr int kFlatEdgeMaxDetailRows = 3;
+// Ordered-dither rows (the world map's sky and horizon haze) are not flat
+// but repeat every 2 or 4 pixels. Such a row continues "in phase": every
+// margin pixel samples the edge pixel with the same x modulo the period, so
+// the authored dither pattern runs on unbroken. The period is proven over a
+// 16 px strip. Rows of random (noise) dither between at most three indices -
+// short speckle runs around a dominant index, no shape - tile the 16 px edge
+// strip itself (period 16): noise has no feature to repeat visibly, while an
+// edge crossing a shape (a long run) still counts as detail.
+constexpr int kPeriodStrip = 16;
+std::uint8_t g_edge_period[4][160][2];  // [layer][row][0=left,1=right]
+
+int row_period(gba::GbaBus* bus, int layer, int y, bool left,
+               bool allow_noise) {
+    const int x0 = left ? 0 : 240 - kFlatEdgeStrip;
+    const int first = bg_index_at(bus, layer, left ? 0 : 239, y);
+    if (first < 0) return -1;
+    bool flat = true;
+    for (int x = x0; x < x0 + kFlatEdgeStrip && flat; ++x)
+        flat = bg_index_at(bus, layer, x, y) == first;
+    if (flat) return 1;
+    int px[kPeriodStrip];
+    const int s0 = left ? 0 : 240 - kPeriodStrip;
+    for (int i = 0; i < kPeriodStrip; ++i) px[i] = bg_index_at(bus, layer, s0 + i, y);
+    for (int period : {2, 4}) {
+        bool ok = true;
+        for (int i = 0; i + period < kPeriodStrip && ok; ++i)
+            ok = px[i] == px[i + period];
+        if (ok) return period;
+    }
+    if (!allow_noise) return 0;
+    // Noise dither: up to four indices where no non-dominant index forms a
+    // run longer than 3 px (a shape edge leaves a long run of one colour).
+    int counts[4] = {0, 0, 0, 0}, values[4] = {-1, -1, -1, -1}, ndistinct = 0;
+    for (int i = 0; i < kPeriodStrip; ++i) {
+        int k = 0;
+        while (k < ndistinct && values[k] != px[i]) ++k;
+        if (k == ndistinct) {
+            if (ndistinct == 4) return 0;
+            values[ndistinct++] = px[i];
+        }
+        ++counts[k];
+    }
+    int dominant = 0;
+    for (int k = 1; k < ndistinct; ++k)
+        if (counts[k] > counts[dominant]) dominant = k;
+    for (int i = 0, run = 0; i < kPeriodStrip; ++i) {
+        run = (i > 0 && px[i] == px[i - 1]) ? run + 1 : 1;
+        if (px[i] != values[dominant] && run > 3) return 0;
+    }
+    return kPeriodStrip;
+}
+
+bool flat_edge(gba::GbaBus* bus, unsigned layers, bool left,
+               bool allow_noise) {
+    int detail_rows = 0;
+    for (int layer = 0; layer < 4; ++layer) {
+        if (!(layers & (1u << layer))) continue;
+        for (int y = 0; y < 160; ++y) {
+            int period = row_period(bus, layer, y, left, allow_noise);
+            if (period < 0) return false;
+            if (period == 0) {
+                if (++detail_rows > kFlatEdgeMaxDetailRows) return false;
+                period = 1;
+            }
+            g_edge_period[layer][y][left ? 0 : 1] =
+                static_cast<std::uint8_t>(period);
+        }
+    }
+    return true;
+}
+
+extern "C" int buus_fury_flat_edge_provider(
+    int layer, int hx, int y, int* source_x, int* source_y) {
+    if (y < 0 || y >= 160 || layer < 0 || layer > 3) return 0;
+    if (hx < 0 && g_flat_edge_left) {
+        const int p = g_edge_period[layer][y][0];
+        *source_x = ((hx % p) + p) % p;  // same phase, inside [0, p)
+        *source_y = y;
+        return 1;
+    }
+    if (hx >= 240 && g_flat_edge_right) {
+        const int p = g_edge_period[layer][y][1];
+        *source_x = 240 - p + (hx - (240 - p)) % p;  // inside [240-p, 240)
+        *source_y = y;
+        return 1;
+    }
+    return 0;
+}
+
+
+// Title-page margin art (opt-in, GBARECOMP_BF_TITLE_ART=1). The title is a
+// manga page with nothing authored past 240 px; the side strips are new art
+// in the page's own style, drawn by tools/make_title_margin_art.py. It is
+// invented content, so it stays off unless the player asks for it. The page
+// is recognised by its register layout plus a hash of the top ten map rows
+// (unchanged by the menu cursor). Both dumps share that map, but the Spanish
+// translation redraws the title as a manga page while the USA cart keeps its
+// navy-sky poster, so the tile graphics pick the matching strips; the USA
+// strips only continue that poster's sky and Dragon Ball rim. The Spanish
+// page is composed separately for each strip width (every 12 px), so a
+// 16:9 window's narrow margins still show whole motifs; the smallest
+// composition at least as wide as the margin is used, cropped at its far
+// (outer) side.
+constexpr std::uint32_t kTitleMapHash = 0x37CC9CFAu;
+constexpr std::uint32_t kTitleCharHashSpanish = 0x03F946C3u;
+constexpr std::uint32_t kTitleCharHashUsa = 0xB7B8C258u;
+bool g_title_art_feature = false;
+const TitleArtVariant* g_title_variants = nullptr;
+int g_title_variant_count = 0;
+
+std::uint32_t fnv1a(const std::uint8_t* p, int n) {
+    std::uint32_t h = 0x811C9DC5u;
+    for (int i = 0; i < n; ++i) h = (h ^ p[i]) * 0x01000193u;
+    return h;
+}
+
+// Returns true on the title page and selects its art (null when unknown).
+bool is_title_page(gba::GbaBus* bus) {
+    if (bus->io().read16(0x000u) != 0x0200u ||
+        bus->io().read16(0x00Au) != 0x1E83u)
+        return false;
+    const std::uint8_t* vram = bus->vram_ptr();
+    if (fnv1a(vram + 30u * 0x800u, 640) != kTitleMapHash)
+        return false;
+    const std::uint32_t chars = fnv1a(vram, 2048);
+    g_title_variants = nullptr;
+    g_title_variant_count = 0;
+    if (chars == kTitleCharHashSpanish) {
+        g_title_variants = kTitleEsVariants;
+        g_title_variant_count = static_cast<int>(std::size(kTitleEsVariants));
+    } else if (chars == kTitleCharHashUsa) {
+        g_title_variants = kTitleUsaVariants;
+        g_title_variant_count = static_cast<int>(std::size(kTitleUsaVariants));
+    }
+    return true;
+}
+
+const TitleArtVariant& title_variant_for(int margin) {
+    for (int i = 0; i < g_title_variant_count; ++i)
+        if (g_title_variants[i].width >= margin) return g_title_variants[i];
+    return g_title_variants[g_title_variant_count - 1];
+}
+
+// One scanline spanning both margins (hardware x -extra_left .. 239 +
+// extra_right); the native 240 columns are transparent placeholders.
+const std::uint16_t* title_art_provider(int y, int* left, int* width) {
+    static std::uint16_t row[gba::GbaPpu::kMaxRenderWidth];
+    const int ml = static_cast<int>(g_ws_extra_left);
+    const int mr = static_cast<int>(g_ws_extra_right);
+    if (y < 0 || y >= kTitleArtH || !g_title_variants ||
+        ml + mr + 240 > static_cast<int>(gba::GbaPpu::kMaxRenderWidth))
+        return nullptr;
+    const TitleArtVariant& lv = title_variant_for(ml);
+    const TitleArtVariant& rv = title_variant_for(mr);
+    for (int i = 0; i < ml; ++i) {      // hx = i - ml, inner edge at hx = -1
+        const int sx = lv.width - ml + i;
+        row[i] = sx >= 0 ? lv.left[y * lv.width + sx] : 0x8000u;
+    }
+    for (int i = 0; i < 240; ++i) row[ml + i] = 0x8000u;
+    for (int i = 0; i < mr; ++i)
+        row[ml + 240 + i] = i < rv.width ? rv.right[y * rv.width + i] : 0x8000u;
+    *left = -ml;
+    *width = ml + 240 + mr;
+    return row;
+}
+
+// Once per frame: choose the margin source for non-field screens.
+void update_screen_margins(gba::GbaBus* bus) {
+    gba::g_ws_bg_xy_provider = nullptr;
+    gba::g_ws_margin_backdrop_provider = nullptr;
+    g_flat_edge_left = g_flat_edge_right = false;
+    if (!bus || !g_ws_active || field_scene_shape(bus) || menu_stripe_scene(bus))
+        return;
+    if (is_title_page(bus)) {
+        if (g_title_art_feature && g_title_variants)
+            gba::g_ws_margin_backdrop_provider = &title_art_provider;
+        return;
+    }
+    const std::uint16_t dispcnt = bus->io().read16(0x000u);
+    // Mode 0 or 1, no windows (a window would make the edge column
+    // unrepresentative). Only regular (text) BGs are checked and continued:
+    // in mode 1 that is BG0/BG1, while the affine BG2 is already extrapolated
+    // by the renderer. This covers the flight world map, whose sky (BG1) is a
+    // per-row gradient at both edges with clouds only in the middle, and
+    // whose horizon haze (BG0) is horizontally uniform.
+    const unsigned mode = dispcnt & 7u;
+    if (mode > 1u || (dispcnt & 0xE000u) != 0u) return;
+    const unsigned layers = (dispcnt >> 8) & (mode == 0u ? 0xFu : 0x3u);
+    if (!layers) return;
+    // Noise-dither tiling is limited to mode 1 (the flight world map); still
+    // screens in mode 0 only continue flat or strictly periodic rows.
+    g_flat_edge_left = flat_edge(bus, layers, true, mode == 1u);
+    g_flat_edge_right = flat_edge(bus, layers, false, mode == 1u);
+    if (g_flat_edge_left || g_flat_edge_right) {
+        gba::g_ws_bg_xy_provider = &buus_fury_flat_edge_provider;
+        gba::g_ws_bg_xy_provider_layers = layers;
+    }
+}
+
+// Gameplay QoL (Select auto-advance, L movement turbo, L+R music player and
+// the opt-in waypoint) lives in the bus overrides and is independent of the
+// view width, so it is installed for every run - the faithful 240px profile
+// included. Idempotent: run_game() clears the read override at startup and a
+// state restore may swap the pair, so the frame hook re-asserts it. With no
+// key chord held the overrides return "no change", so native frames stay
+// byte-identical.
+void install_gameplay_hooks() {
+    if (g_runtime_bus_read_override == &buus_fury_bus_read_override &&
+        g_runtime_bus_write_override == &buus_fury_bus_write_override)
+        return;
+    g_runtime_bus_read_override = &buus_fury_bus_read_override;
+    g_runtime_bus_write_override = &buus_fury_bus_write_override;
+    g_turbo_active = false;
+    g_turbo_player = 0u;
+    g_song_cycle_request = 0;
+    g_song_prev_keys = 0x3FFu;
+    g_song_last_index = -1;
+    const char* waypoints = std::getenv("GBARECOMP_BF_WAYPOINTS");
+    g_waypoint_feature = waypoints && waypoints[0] && waypoints[0] != '0';
+    const char* item_guard = std::getenv("GBARECOMP_BF_ITEM_GUARD");
+    g_item_guard = !(item_guard && item_guard[0] == '0');
+    const char* fusion_guard = std::getenv("GBARECOMP_BF_FUSION_GUARD");
+    g_fusion_guard = !(fusion_guard && fusion_guard[0] == '0');
+    const char* title_art = std::getenv("GBARECOMP_BF_TITLE_ART");
+    g_title_art_feature = title_art && title_art[0] && title_art[0] != '0';
+}
+
 }  // namespace
+
+void frame_start(const gbarecomp::ExtendedViewFrameInfo*) {
+    install_gameplay_hooks();
+    update_screen_margins(active_bus());
+}
 
 void install_extended_view(std::uint32_t, std::uint32_t) {
     census_configure();
@@ -1372,17 +1755,9 @@ void install_extended_view(std::uint32_t, std::uint32_t) {
     gba::g_ws_bg_x_provider_layers =
         (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3);
     gba::g_ws_obj_attr_x_provider = &buus_fury_obj_x_provider;
-    g_runtime_bus_read_override = &buus_fury_bus_read_override;
-    g_runtime_bus_write_override = &buus_fury_bus_write_override;
-    g_turbo_active = false;
-    g_turbo_player = 0u;
-    g_song_cycle_request = 0;
-    g_song_prev_keys = 0x3FFu;
-    g_song_last_index = -1;
+    install_gameplay_hooks();
     g_menu_donor_frame = std::numeric_limits<std::uint32_t>::max();
     g_menu_donor_rows = 0u;
-    const char* waypoints = std::getenv("GBARECOMP_BF_WAYPOINTS");
-    g_waypoint_feature = waypoints && waypoints[0] && waypoints[0] != '0';
     if (std::getenv("GBARECOMP_BF_WAYPOINTS_SELFTEST")) {
         std::uint32_t value = 0u;
         const bool count_ok =

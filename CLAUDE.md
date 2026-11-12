@@ -59,17 +59,44 @@ priority.
    to once per composed frame. A per-pixel EWRAM sweep when DISPCNT is
    field-shaped but layer objects are not yet created freezes the game at
    new-game/area transitions.
- 9. Adaptive view uses the boundary-framing view shift (the published mod's
-    approach, shared with Legacy II, same Webfoot engine): g_ws_bg_x_provider
-    computes a per-frame g_render_view_shift that slides the NATIVE viewport
-    within the wider host surface only when the camera approaches a field edge,
-    so the margins always fall inside authored content (zero shift in ordinary
-    areas). The tilemap provider fills margins with authored field tiles and
-    returns kWsTilemapUnavailable outside the field — never a clamp/KeepWrapped
-    fallback (those manufacture a repeated/mirrored edge or show the 256px ring
-    alias, which look wrong, especially as a black right margin). The frame-start
-    housekeeping (view-shift recalculation + actor-tracking generation) lives in
-    bg_x_provider at the first visited pixel (bg==3, output_x==0, screen_y==0).
-    Do NOT switch to g_ws_bg_x_provider = nullptr: the nullptr path was tried
-    and produced broken margin fills, a black right edge near the field boundary,
-    and stale tiles in-game.
+ 9. Adaptive view keeps the native 240px viewport centred (the earlier
+    boundary-framing slide was removed: its incrementally refined field-extent
+    estimate shoved dialogue panels off centre). The tilemap provider fills
+    margins with authored field tiles and returns kWsTilemapUnavailable outside
+    the field - never a clamp/KeepWrapped fallback (those manufacture a
+    repeated/mirrored edge or show the 256px ring alias). field_entry() memoizes
+    resolved entries per (layer, world tile) per composed frame; every path,
+    including a cache miss, must write *out_entry (a missed write once drew a
+    grid of stray dots in the margins). The frame-start housekeeping
+    (resolve-frame counter + actor-tracking generation) lives in bg_x_provider
+    at the first visited pixel (bg==3, output_x==0, screen_y==0). Do NOT switch
+    to g_ws_bg_x_provider = nullptr: it owns that bookkeeping.
+10. Non-field screens (mode 0/1, no windows): a margin row may continue the
+    native edge of each regular BG only when that row is flat over 8 px, or
+    strictly periodic (2/4 px, continued in phase) over 16 px, or - mode 1
+    only, the flight world map - noise dither (<=4 indices, no run >3 px of
+    one colour) that tiles the 16 px edge strip. Anything else stays black.
+    Invented margin art (title page strips from
+    tools/make_title_margin_art.py) is opt-in via GBARECOMP_BF_TITLE_ART and
+    must stay off by default; it is drawn through
+    gba::g_ws_margin_backdrop_provider, never by writing guest VRAM.
+11. The West City waypoint's 36 data bytes at 0x087E6A00 (0xFF padding on
+    every accepted dump) are served unconditionally; only the count/array
+    pointer follow GBARECOMP_BF_WAYPOINTS. Gating the data too makes a
+    savestate taken with the waypoint assert "UNABLE TO FIND AREA".
+12. Bug-fix guards in buus_fury_extended_view.cpp are on by default and each
+    has an env switch: GBARECOMP_BF_FUSION_GUARD (hide A while a failed
+    fusion is the controlled character: 0x03001068 slot 5/7 whose fusion
+    duration at block+0x08 is 1800 frames; sprite ids vary: 0x20/0x21/0x2B) and GBARECOMP_BF_ITEM_GUARD (VM item ops 130/131 at
+    0x08000BB2..0x08000BF0 may never raise a count). Both were reproduced
+    before patching; keep any new guard to that standard.
+13. Upstream sync: merge mstan/gbarecomp and mstan/recomp-ui on a
+    sync/upstream-YYYYMMDD branch of the forks in github/, keep fork features
+    that are better or game-specific, adopt upstream where it covers the same
+    ground better, then update nested submodules (external/arm-recomp-core),
+    rebuild gba_recompile, regen and rebuild. Any new native fast path must
+    also stand down while g_runtime_bus_write_override is installed. Snapshot
+    format bumps (v2 -> v6 in Nov 2026) need a fork-side legacy reader: v2
+    stays loadable through deserialize_cpu_legacy_v2 / GbaAudio::
+    deserialize_legacy_v2 / TIME rebuilt from META (snapshot.cpp). Re-verify
+    it against the previous executable after every future version bump.

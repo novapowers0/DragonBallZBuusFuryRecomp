@@ -12,7 +12,7 @@ original ARM code is statically recompiled and linked into a standalone
 executable with its own launcher and mod system. It is a real port, not an
 emulator.
 
-[![Version](https://img.shields.io/badge/version-v0.0.6--WIP-orange?style=flat-square)](../../releases)
+[![Version](https://img.shields.io/badge/version-v0.0.8-blue?style=flat-square)](../../releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=flat-square)](../../releases)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-lightgrey?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/novapowers0/DragonBallZBuusFuryRecomp?style=flat-square&color=yellow)](https://github.com/novapowers0/DragonBallZBuusFuryRecomp)
@@ -25,7 +25,7 @@ emulator.
 | **Platform** | Windows x64 |
 | **Engine** | Game Boy Advance (gbarecomp) |
 | **Genre** | Action RPG |
-| **Version** | v0.0.6-WIP (preview) |
+| **Version** | v0.0.8 (preview) |
 
 Copyright (c) 2026 **NovaPowers**. Released under the PolyForm Noncommercial
 License 1.0.0 (see [`LICENSE`](LICENSE)).
@@ -36,21 +36,42 @@ License 1.0.0 (see [`LICENSE`](LICENSE)).
 
 ---
 
-## What's new
+## What's new (v0.0.8)
 
-- **Boot matches the real BIOS handoff**: the fast boot now leaves `DISPCNT`
-  forced-blank and `POSTFLG` set exactly like the real BIOS (and mGBA), and the
-  PPU starts on mGBA's skipBios phase.
-- **Cheat multipliers**: EXP/Zenie ×2/×4, damage taken ×2/×0.5 and a slow XP
-  curve, grouped under *Cheats - Multipliers* and *Cheats - Difficulty* (all off
-  by default).
-- **Faster boot**: the startup logos fast-forward to the title screen (~1 s
-  instead of ~8), with the guest frame sequence untouched.
-- **Faster margins**: the adaptive widescreen render now resolves each field tile
-  once per frame (about +8 % at 480 px), pixel-identical to before.
-- **Start + Select guard**: A + B + Start + Select still soft-resets the game
-  (the BIOS reset passes through) while Start + Select opens the in-game menu.
-- **Opt-in audio smoothing** (`GBARECOMP_AUDIO_SMOOTH=1`).
+**Fixes**
+- **Fusing no longer closes the game**: about 220 skill routines used by
+  Gotenks/Gogeta (and the item menu) were missing from the static build; they
+  are now recompiled in. The whole game runs fully static (no on-the-fly
+  compiles) on the tested saves.
+- **Failed fusion + A on a world-map circle** no longer hangs the game, and the
+  **255 Senzu Beans** item-count underflow is blocked. Both fixes are on by
+  default (`GBARECOMP_BF_FUSION_GUARD=0` / `GBARECOMP_BF_ITEM_GUARD=0` restore
+  the original behaviour).
+- **Widescreen**: no more grid of stray dots in the margins; the HUD stays on
+  the screen edge while an area-name banner is shown.
+- **Classic 240 px profile**: L-turbo, Select auto-advance and the L+R music
+  player now work there too, and holding Select while walking no longer presses
+  A by itself.
+- A save state taken with the West City waypoint no longer crashes when loaded
+  without it.
+
+**Widescreen**
+- Logo screens fill the whole width, and the **flight world map** now extends
+  its sky and horizon haze to both edges.
+- Optional **title-page art** for the wide margins (new manga panels for the
+  Spanish title, sky and Dragon Ball rim for the USA one), composed for every
+  window width. Off by default; the launcher's "extras" profile turns it on.
+
+**Content (in-game Cheats menu, all off by default)**
+- **All story characters at save pads**: Goku, Gohan, Goten, Trunks and Vegeta
+  can be picked from any save pad.
+- **Gohan: Great Saiyaman form**, the unfinished form left in the game, plus a
+  preset that restores his Super Saiyan.
+
+**Engine**
+- Updated to the current gbarecomp and recomp-ui: **stereo audio** and about
+  **40 % faster** emulation on the test machine. Save states from v0.0.7 still
+  load (verified frame-for-frame against the previous build).
 
 ## Highlights
 

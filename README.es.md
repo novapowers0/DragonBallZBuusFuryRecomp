@@ -12,7 +12,7 @@ código ARM original del juego se recompila estáticamente y se enlaza en un
 ejecutable autónomo con su propio launcher y sistema de mods. Es un port real,
 no un emulador.
 
-[![Versión](https://img.shields.io/badge/version-v0.0.6--WIP-orange?style=flat-square)](../../releases)
+[![Versión](https://img.shields.io/badge/version-v0.0.8-blue?style=flat-square)](../../releases)
 [![Plataforma](https://img.shields.io/badge/Plataforma-Windows%20x64-0078D6?style=flat-square)](../../releases)
 [![Licencia](https://img.shields.io/badge/licencia-PolyForm%20Noncommercial%201.0.0-lightgrey?style=flat-square)](LICENSE)
 [![Estrellas](https://img.shields.io/github/stars/novapowers0/DragonBallZBuusFuryRecomp?style=flat-square&color=yellow)](https://github.com/novapowers0/DragonBallZBuusFuryRecomp)
@@ -25,7 +25,7 @@ no un emulador.
 | **Plataforma** | Windows x64 |
 | **Motor** | Game Boy Advance (gbarecomp) |
 | **Género** | Action RPG |
-| **Versión** | v0.0.6-WIP (preview) |
+| **Versión** | v0.0.8 (preview) |
 
 Copyright (c) 2026 **NovaPowers**. Publicado bajo la PolyForm Noncommercial
 License 1.0.0 (ver [`LICENSE`](LICENSE)).
@@ -36,21 +36,42 @@ License 1.0.0 (ver [`LICENSE`](LICENSE)).
 
 ---
 
-## Novedades
+## Novedades (v0.0.8)
 
-- **Arranque fiel al BIOS real**: el arranque rápido ahora deja `DISPCNT` en
-  *forced blank* y `POSTFLG` activado igual que el BIOS real (y mGBA), y el PPU
-  arranca en la fase skipBios de mGBA.
-- **Multiplicadores de cheats**: EXP/Zenie ×2/×4, daño recibido ×2/×0.5 y una
-  curva de XP lenta, agrupados en *Cheats - Multipliers* y *Cheats - Difficulty*
-  (todos apagados por defecto).
-- **Arranque más rápido**: los logos iniciales avanzan rápido hasta el título
-  (~1 s en lugar de ~8), sin tocar la secuencia de fotogramas del juego.
-- **Márgenes más rápidos**: el render de pantalla ancha resuelve cada tile de
-  campo una vez por fotograma (≈ +8 % a 480 px), idéntico píxel a píxel.
-- **Guarda de Start + Select**: A + B + Start + Select sigue reiniciando el juego
-  (el reset del BIOS pasa al juego) mientras Start + Select abre el menú.
-- **Suavizado de audio opcional** (`GBARECOMP_AUDIO_SMOOTH=1`).
+**Correcciones**
+- **Fusionarse ya no cierra el juego**: faltaban en el build estático unas 220
+  rutinas de habilidades de Gotenks/Gogeta (y del menú de objetos); ahora están
+  recompiladas. Todo el juego corre 100 % estático (sin compilar nada al vuelo)
+  en las partidas probadas.
+- **Fusión fallida + A en un círculo del mapa del mundo** ya no cuelga el juego,
+  y se bloquea el exploit de las **255 Semillas del Ermitaño**. Ambas
+  correcciones vienen activadas (`GBARECOMP_BF_FUSION_GUARD=0` /
+  `GBARECOMP_BF_ITEM_GUARD=0` vuelven al comportamiento original).
+- **Pantalla ancha**: desaparece la rejilla de puntos en los márgenes; el HUD se
+  queda en el borde también mientras se ve el rótulo de la zona.
+- **Perfil clásico 240 px**: el turbo con L, el avance con Select y el
+  reproductor de música L+R funcionan también ahí, y mantener Select al caminar
+  ya no pulsa A por su cuenta.
+- Un estado guardado con el atajo de West City ya no se cuelga al cargarlo sin él.
+
+**Pantalla ancha**
+- Los logos ocupan todo el ancho y el **mapa del mundo** en vuelo extiende su
+  cielo y la bruma del horizonte hasta los bordes.
+- **Arte opcional de portada** para los márgenes (viñetas de manga nuevas en la
+  portada española; cielo y Bola de Dragón en la USA), compuesto para cada ancho
+  de ventana. Apagado por defecto; lo activa el perfil "extras" del lanzador.
+
+**Contenido (menú de trucos, todo apagado por defecto)**
+- **Todos los personajes de la historia en los círculos de guardado**: Goku,
+  Gohan, Goten, Trunks y Vegeta desde cualquier círculo.
+- **Gohan: forma Gran Saiyaman**, la forma sin terminar que quedó en el juego,
+  y un truco que le devuelve la Super Saiyajin.
+
+**Motor**
+- Actualizado a gbarecomp y recomp-ui actuales: **audio estéreo** y alrededor de
+  un **40 % más rápido** en el equipo de pruebas. Los estados guardados de la
+  v0.0.7 siguen cargando (verificado fotograma a fotograma contra el build
+  anterior).
 
 ## Lo más destacado
 

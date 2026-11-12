@@ -60,6 +60,36 @@ const gbarecomp::CheatPreset kCheats[] = {
      "83000C70 2000\n83000C72 E59F\n83000C74 FF12\n83000C76 E12F\n"
      "83000C78 1201\n83000C7A 0300",
      "Cheats - Aids"},
+    // Extra content, verified in game (session 9) on the player's chapter-1
+    // save and on a downloaded late-game save. Each character record is 0x68
+    // bytes from 0x03001560; byte +0 is 3 when the character can be picked at
+    // a save pad's "Switch Characters" and 2 otherwise. The community code
+    // sets all eight records (fusions included); this preset unlocks only the
+    // five story characters, like other ports do, because a fusion kept
+    // outside its timer is exactly where the game misbehaves. The flags are
+    // part of the save, so they stay unlocked after saving.
+    {"All story characters at save pads",
+     "Goku, Gohan, Goten, Trunks and Vegeta can be picked from any save pad "
+     "(Switch Characters). Stays unlocked once you save.",
+     "43001560 0003\n00000005 0068",
+     "Cheats - Content"},
+    // Gohan's skill slot at 0x030015D6 holds Super Saiyan (0x14). The unused
+    // Great Saiyaman form (0x12) is still in the game: the skill list shows
+    // "Saiyaman" with its own icon and using it (L to pick, B to use) changes
+    // Gohan's sprite. The form was never finished, so its battle effects are
+    // not guaranteed. The slot is saved with the game, hence the restore
+    // preset (0x14 is the stock value on every save checked).
+    {"Gohan: Great Saiyaman form (unused)",
+     "Swaps Gohan's Super Saiyan for the unfinished Great Saiyaman form left "
+     "in the game. If you save with it, enable 'Gohan: restore Super Saiyan' "
+     "once to get Super Saiyan back.",
+     "330015D6 0012",
+     "Cheats - Content"},
+    {"Gohan: restore Super Saiyan",
+     "Puts Super Saiyan back in Gohan's skills (undoes the Great Saiyaman "
+     "swap). Turn it off again afterwards.",
+     "330015D6 0014",
+     "Cheats - Content"},
     // Dialogue text printing is paced by a per-character countdown in the
     // text engine (0x030038A4, observed counting 4..1 while printing): a
     // character prints when the countdown reaches zero. Re-asserting 1 every
@@ -215,6 +245,9 @@ int main(int argc, char** argv) {
     opts.max_resize_view_width = 480;
     opts.resize_driven_view = true;
     opts.extended_view_init = &buus_fury::install_extended_view;
+    // Gameplay QoL keys (Select auto-advance, L turbo, L+R music) at any
+    // view width, not only once the widescreen view is expanded.
+    opts.extended_view_frame = &buus_fury::frame_start;
     opts.launcher_expose_widescreen = false;
     opts.launcher_expose_adaptive_view = false;
     opts.launcher_region = "USA";

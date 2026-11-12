@@ -156,11 +156,25 @@ It has no affiliation with or endorsement from the game publisher.
 - Assist Tools (in-game menu): save states (F1-F9 / Shift+F1-F9),
   fast-forward and 8-second rewind.
 - Cheats (in-game menu): curated CodeBreaker Advance presets for this cart
-  (max Zenie, infinite HP/EP, max EXP, infinite fusion time, all Dragon Balls).
+  (max Zenie, infinite HP/EP, max EXP, infinite fusion time, all Dragon Balls,
+  all story characters at save pads, Gohan's unused Great Saiyaman form).
   All off by default.
 - Editor (in-game menu): read and change live values (Zenie, HP/EP and their
   maxima, EXP, Attack, Dragon Balls).
+- Quality of life at any width: L = 1.5x turbo, hold Select to advance text,
+  L+R = music player.
+- Bug fixes on by default: fusing no longer closes the game, a failed fusion
+  on a world-map circle no longer hangs, and the 255 Senzu Beans underflow is
+  blocked (GBARECOMP_BF_FUSION_GUARD=0 / GBARECOMP_BF_ITEM_GUARD=0 to disable).
+- Adaptive Widescreen: real map scenery in the margins, HUD at the screen
+  edges, full-width menus, logos and flight world map. Optional title-page
+  art: set GBARECOMP_BF_TITLE_ART=1.
+- Stereo audio. Save states from v0.0.7 still load.
+- Fully static build: no code is compiled while you play.
 - Five screen colour profiles (Raw, Unlit, Frontlit, Backlit, Classic).
+
+If the launcher takes a while to appear on first start, wait: some Windows
+systems are slow to enumerate controllers.
 
 ## In-game menu
 
@@ -184,8 +198,11 @@ $forbidden = Get-ChildItem -LiteralPath $stage -Recurse -File | Where-Object {
     $_.Extension -in @('.gba', '.bin', '.bios', '.sav', '.srm', '.fla',
         '.flash', '.state', '.json', '.log', '.apk') -or
     $relative -match '(^|\\)(generated|recomp_cache)(\\|$)' -or
+    # fetch_tcc.ps1 stages the overlay shim headers under overlay_toolchain\
+    # plus the one arm-recomp-core header they forward to (two levels up).
     ($_.Extension -in @('.cpp', '.c', '.h') -and
-        $relative -notmatch '^overlay_toolchain\\') -or
+        $relative -notmatch '^overlay_toolchain\\' -and
+        $relative -ne 'external\arm-recomp-core\profiles\armv4t_gba\runtime_arm_types.h') -or
     $_.Name -ieq 'gba_bios.bin' -or
     $_.Name -in @('game.toml', 'rom.cfg', 'bios.cfg', 'config.ini',
         'keybinds.ini', 'mods.ini', 'state.toml')
